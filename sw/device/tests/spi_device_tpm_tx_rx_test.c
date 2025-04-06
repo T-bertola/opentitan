@@ -15,6 +15,8 @@
 #include "sw/device/lib/testing/test_framework/check.h"
 #include "sw/device/lib/testing/test_framework/ottf_main.h"
 #include "sw/device/lib/testing/test_framework/status.h"
+#include "spi_device_regs.h"
+#include "pinmux_regs.h"
 
 #include "hw/top_earlgrey/sw/autogen/top_earlgrey.h"
 #include "sw/device/lib/testing/autogen/isr_testutils.h"
@@ -136,6 +138,17 @@ bool test_main(void) {
   CHECK_DIF_OK(dif_rv_plic_init(
       mmio_region_from_addr(TOP_EARLGREY_RV_PLIC_BASE_ADDR), &plic));
 
+  static const uint32_t disable_SPI_mode[1] = {0x00000000};
+  //static const uint32_t enable_SPI_mode[1] = {0x00000010};
+  mmio_region_memcpy_to_mmio32(spi_device.dev.base_addr, SPI_DEVICE_CONTROL_REG_OFFSET, disable_SPI_mode, 4 );
+
+  static const uint32_t enable_intr[1] = {0x000000E0};
+  mmio_region_memcpy_to_mmio32(spi_device.dev.base_addr, SPI_DEVICE_TPM_INT_ENABLE_REG_OFFSET, enable_intr, 4 );
+  ptrdiff_t reg_offset =
+      PINMUX_MIO_PERIPH_INSEL_0_REG_OFFSET + (ptrdiff_t)(46 << 2);
+  mmio_region_write32(pinmux.base_addr,reg_offset, 0);
+  
+
   // Set IoA7 for tpm csb.
   // Longer term this needs to migrate to a top specific, platform specific
   // setting.
@@ -199,7 +212,12 @@ bool test_main(void) {
     CHECK_DIF_OK(dif_spi_device_tpm_free_write_fifo(&spi_device));
     ack_spi_tpm_header_irq(&spi_device);
 
+    //mmio_region_memcpy_to_mmio32(spi_device.dev.base_addr, SPI_DEVICE_CONTROL_REG_OFFSET, enable_SPI_mode, 4 );
+    //mmio_region_memcpy_to_mmio32(spi_device.dev.base_addr, SPI_DEVICE_CONTROL_REG_OFFSET, disable_SPI_mode, 4 );
+    mmio_region_write32(pinmux.base_addr,reg_offset, 1);
+    mmio_region_write32(pinmux.base_addr,reg_offset, 0);
     LOG_INFO("SYNC: Waiting Read");
+
     // Wait for read interrupt.
     ATOMIC_WAIT_FOR_INTERRUPT(header_interrupt_received);
 

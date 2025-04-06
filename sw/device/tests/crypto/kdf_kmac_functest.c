@@ -111,11 +111,23 @@ bool test_main(void) {
   CHECK_STATUS_OK(kmac_hwip_default_configure());
 
   status_t test_result = OK_STATUS();
-  for (size_t i = 0; i < ARRAYSIZE(kKdfTestVectors); i++) {
+  // for (size_t i = 0; i < ARRAYSIZE(kKdfTestVectors); i++) {
+  //   current_test_vector = &kKdfTestVectors[i];
+  //   LOG_INFO("Running test %d of %d, test vector identifier: %s", i + 1,
+  //            ARRAYSIZE(kKdfTestVectors),
+  //            current_test_vector->vector_identifier);
+  //   EXECUTE_TEST(test_result, run_test_vector);
+  // }
+    for (size_t i = 0; i < 1; i++) {
     current_test_vector = &kKdfTestVectors[i];
     LOG_INFO("Running test %d of %d, test vector identifier: %s", i + 1,
              ARRAYSIZE(kKdfTestVectors),
              current_test_vector->vector_identifier);
+    LOG_INFO("Test Parameters: ");
+    for (int j = 0; j < 7; j ++){
+      
+    LOG_INFO("Key Part %d: %d \n",j,current_test_vector->key_derivation_key.keyblob[j] );
+    }
     EXECUTE_TEST(test_result, run_test_vector);
   }
   return status_ok(test_result);

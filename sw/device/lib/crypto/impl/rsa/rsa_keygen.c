@@ -7,6 +7,7 @@
 #include "sw/device/lib/base/hardened.h"
 #include "sw/device/lib/base/hardened_memory.h"
 #include "sw/device/lib/crypto/drivers/otbn.h"
+#include "sw/device/lib/runtime/log.h"
 
 // Module ID for status codes.
 #define MODULE_ID MAKE_MODULE_ID('r', 'k', 'g')
@@ -62,9 +63,10 @@ enum {
 static status_t keygen_start(uint32_t mode) {
   // Load the RSA key generation app. Fails if OTBN is non-idle.
   HARDENED_TRY(otbn_load_app(kOtbnAppRsaKeygen));
-
+  LOG_INFO("Loaded OTBN");
   // Set mode and start OTBN.
   HARDENED_TRY(otbn_dmem_write(kOtbnRsaModeWords, &mode, kOtbnVarRsaMode));
+  LOG_INFO("MEM WROTE OTBN, Executing");
   return otbn_execute();
 }
 

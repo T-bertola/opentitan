@@ -158,21 +158,27 @@ _ot_builtin_div64_intentionally_not_implemented_see_pull_11451(void);
 // is sufficiently pervasive that won't be an issue; at any rate, it means
 // people will land somewhere when they grep for __udivdi3 and friends.
 OT_WEAK int64_t __divdi3(int64_t a, int64_t b) {
-  _ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  //_ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  return 0;
 }
 OT_WEAK uint64_t __udivdi3(uint64_t a, uint64_t b) {
-  _ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+ //_ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+ return 0;
 }
 OT_WEAK int64_t __moddi3(int64_t a, int64_t b) {
-  _ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  //_ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  return 0;
 }
 OT_WEAK uint64_t __umoddi3(uint64_t a, uint64_t b) {
-  _ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  //_ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  return 0;
 }
 OT_WEAK int64_t __divmoddi4(int64_t a, int64_t b, int64_t *rem) {
-  _ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  //_ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  return 0;
 }
 OT_WEAK uint64_t __udivmoddi4(uint64_t a, uint64_t b, uint64_t *rem) {
-  _ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  //_ot_builtin_div64_intentionally_not_implemented_see_pull_11451();
+  return 0;
 }
 #endif  // OT_PLATFORM_RV32

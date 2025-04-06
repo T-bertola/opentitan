@@ -143,7 +143,7 @@ static void csrng_generate_output_check(void) {
   uint32_t output[kTestParamFifoBufferSize] = {0};
   CHECK_STATUS_OK(
       csrng_testutils_cmd_generate_run(&csrng, output, ARRAYSIZE(output)));
-
+  LOG_INFO("Random Number: %8x", output[0]);
   uint32_t prev_data = 0;
   for (size_t i = 0; i < ARRAYSIZE(output); ++i) {
     CHECK(prev_data != output[i],

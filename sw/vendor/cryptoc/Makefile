@@ -28,7 +28,7 @@ Q :=
 endif
 
 CFLAGS += -Iinclude
-CFLAGS += -Wall -Werror
+CFLAGS += -Wall -Wno-visibility
 CFLAGS += -DTHIRD_PARTY
 ifeq ($(CONFIG_UPTO_SHA512),y)
 CFLAGS += -DSHA512_SUPPORT

@@ -333,5 +333,7 @@ SECTIONS {
     end_of_non_volatile_scratch = . ;
   } > ottf_flash
 
+  PROVIDE(end = .);
+
   INCLUDE sw/device/info_sections.ld
 }

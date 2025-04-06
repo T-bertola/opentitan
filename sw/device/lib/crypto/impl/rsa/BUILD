@@ -38,6 +38,7 @@ cc_library(
         "//sw/device/lib/base:memory",
         "//sw/device/lib/crypto/drivers:otbn",
         "//sw/otbn/crypto:run_rsa_keygen",
+        "//sw/device/lib/runtime:log"
     ],
 )
 

@@ -275,7 +275,8 @@ fpga_cw340(
         "--interface={interface}",
     ] + select({
         "@//ci:lowrisc_fpga_cw340": ["--uarts=/dev/ttyACM_CW340_1,/dev/ttyACM_CW340_0"],
-        "//conditions:default": [],
+ #       "//conditions:default": [],
+        "//conditions:default": ["--uarts=/dev/ttyACM1,/dev/ttyACM2"],
     }),
     design = "earlgrey",
     exec_env = "fpga_cw340",
@@ -286,7 +287,8 @@ fpga_cw340(
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
     param = {
-        "interface": "hyper340",
+        #"interface": "hyper340",
+        "interface": "cw340",
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
         "exit_failure": DEFAULT_TEST_FAILURE_MSG,
     },
@@ -347,7 +349,8 @@ fpga_cw340(
     manifest = "//sw/device/silicon_owner:manifest",
     otp = "//sw/device/silicon_creator/rom_ext/e2e:otp_img_secret2_locked_rma",
     param = {
-        "interface": "hyper340",
+        #"interface": "hyper340",
+        "interface": "cw340",
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
         "exit_failure": DEFAULT_TEST_FAILURE_MSG,
         "assemble": "{rom_ext}@0 {firmware}@0x10000",
