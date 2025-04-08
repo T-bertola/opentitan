@@ -44,6 +44,14 @@ git_override(
     remote = "https://github.com/lowRISC/misc-linters",
 )
 
+# openssl_ext = use_extension("//third_party/external/openssl:extension.bzl", "openssl_repo")
+# #openssl_ext(name = "openssl_headers", path = "/usr/include/openssl-riscv/include")
+# use_repo(openssl_ext, "openssl_headers")
+# openssl_ext(
+#     name = "openssl_headers",
+#     path = "/usr/include/openssl-riscv/include",  # Path to OpenSSL headers
+# )
+
 # Includes:
 include("//third_party/rust:rust.MODULE.bazel")
 

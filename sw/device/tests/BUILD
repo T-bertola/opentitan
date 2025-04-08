@@ -3872,27 +3872,21 @@ opentitan_test(
         "-Wno-error=xor-used-as-pow"
     ],
     linkopts = [
-        "-L/home/tcb2196/OpenTitan/ot_tools/riscv/riscv32-unknown-elf/lib",  # Add the library path
+        "-L/home/tcb2196/OpenTitan/ot_tools/riscv/riscv32-unknown-elf/lib -lc",  # Add the library path
         "-lnosys",
+        "-Wl,--wrap=abort",
         
     ],
-    # exec_env = dicts.add(
-    #     EARLGREY_SILICON_OWNER_ROM_EXT_ENVS,
-    #     {
-    #         "//hw/top_earlgrey:sim_dv": None,
-    #         "//hw/top_earlgrey:sim_verilator": None,
-    #         "//hw/top_earlgrey:fpga_cw340_sival": None,
-    #         "//hw/top_earlgrey:fpga_cw340_sival_rom_ext": None,
-    #     },
-    # ),
-        exec_env = dicts.add(
-        EARLGREY_TEST_ENVS,
+    exec_env = dicts.add(
         EARLGREY_SILICON_OWNER_ROM_EXT_ENVS,
-        EARLGREY_CW340_TEST_ENVS,
         {
-            "//hw/top_earlgrey:silicon_creator": None,
+            "//hw/top_earlgrey:sim_dv": None,
+            "//hw/top_earlgrey:sim_verilator": None,
+            "//hw/top_earlgrey:fpga_cw340_sival": None,
+            "//hw/top_earlgrey:fpga_cw340_sival_rom_ext": None,
         },
     ),
+
     fpga = fpga_params(
         # This test requires the spi full duplex on the hyperdebug board.
         tags = ["manual"],

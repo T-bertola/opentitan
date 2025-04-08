@@ -21,7 +21,6 @@
 #include "sw/device/lib/testing/test_framework/check.h"
 #include "sw/device/lib/testing/test_framework/ottf_main.h"
 #include "sw/device/lib/testing/test_framework/status.h"
-#include "sw/device/lib/dif/dif_spi_host.h"
 #include "spi_device_regs.h"
 #include "TPM/TPMCmd/tpm/src/TPM_CFG.h"
 #include "pinmux_regs.h"
@@ -68,6 +67,12 @@ const static dif_spi_device_tpm_config_t kTpmConfig = {
     .disable_locality_check = false};
 
 static volatile bool header_interrupt_received = false;
+
+void __wrap_abort(void) {
+  // Just call your OpenTitan version directly
+  extern void abort(void);
+  abort();
+}
 
 void bytes_to_words_util(const uint8_t *bytes, uint32_t byte_count, uint32_t *output, uint32_t *output_count) {
     uint32_t i, j;

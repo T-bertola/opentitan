@@ -135,23 +135,23 @@ register_toolchains(
     "//rules/opentitan:localtools",
 )
 
-new_local_repository(
-    name = "openssl_headers",
-    path = "/usr/include/openssl-riscv/include/",
-    build_file_content = """
-cc_library(
-    name = "openssl",
-    hdrs = glob(["openssl/**/*.h"]),
-    linkopts = [
-        "-L/home/tcb2196/OpenTitan/ot_tools/riscv/riscv32-unknown-elf/lib",  # Add the library path
-        "-lnosys"
-    ],
+# new_local_repository(
+#     name = "openssl_headers",
+#     path = "/usr/include/openssl-riscv/include/",
+#     build_file_content = """
+# cc_library(
+#     name = "openssl",
+#     hdrs = glob(["openssl/**/*.h"]),
+#     linkopts = [
+#         "-L/home/tcb2196/OpenTitan/ot_tools/riscv/riscv32-unknown-elf/lib",  # Add the library path
+#         "-lnosys"
+#     ],
 
-    includes = ["."],
-    visibility = ["//visibility:public"],
-)
-    """,
-)
+#     includes = ["."],
+#     visibility = ["//visibility:public"],
+# )
+#     """,
+# )
 
     # linkopts=[
     #     "-L/usr/include/openssl-riscv/lib -lssl -lcrypto",
