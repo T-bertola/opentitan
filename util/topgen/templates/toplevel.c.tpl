@@ -5,17 +5,7 @@ ${gencmd}
 <%
 import topgen.lib as lib
 
-alert_handler = lib.find_module(top['module'], 'alert_handler')
-if alert_handler is not None:
-    has_alert_handler = addr_space in alert_handler['base_addrs'][None]
-else:
-    has_alert_handler = False
-
-plic = lib.find_module(top['module'], 'rv_plic')
-if plic is not None:
-    has_plic = addr_space in plic['base_addrs'][None]
-else:
-    has_plic = False
+has_alert_handler = lib.find_module(top['module'], 'alert_handler') or top['name'] == 'englishbreakfast'
 %>\
 
 #include "${helper.header_path}"
@@ -29,7 +19,6 @@ else:
  */
 ${helper.alert_mapping.render_definition()}
 % endif
-% if has_plic:
 
 /**
  * PLIC Interrupt Source to Peripheral Map
@@ -38,4 +27,3 @@ ${helper.alert_mapping.render_definition()}
  * `${helper.plic_sources.name.as_c_type()}`.
  */
 ${helper.plic_mapping.render_definition()}
-%endif

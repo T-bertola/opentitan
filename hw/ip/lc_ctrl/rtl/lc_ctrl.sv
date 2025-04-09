@@ -29,9 +29,7 @@ module lc_ctrl
   parameter lc_keymgr_div_t RndCnstLcKeymgrDivProduction   = LcKeymgrDivWidth'(3),
   parameter lc_keymgr_div_t RndCnstLcKeymgrDivRma          = LcKeymgrDivWidth'(4),
   parameter lc_token_mux_t  RndCnstInvalidTokens           = {TokenMuxBits{1'b1}},
-  parameter bit             SecVolatileRawUnlockEn         = 0,
-  parameter int             EscNumSeverities               = 4,
-  parameter int             EscPingCountWidth              = 16
+  parameter bit             SecVolatileRawUnlockEn         = 0
 ) (
   // Life cycle controller clock
   input                                              clk_i,
@@ -62,8 +60,8 @@ module lc_ctrl
   input  prim_esc_pkg::esc_rx_t                      esc_scrap_state1_tx_i,
   output prim_esc_pkg::esc_tx_t                      esc_scrap_state1_rx_o,
   // Power manager interface (inputs are synced to lifecycle clock domain).
-  input  pwr_lc_req_t                                pwr_lc_i,
-  output pwr_lc_rsp_t                                pwr_lc_o,
+  input  pwrmgr_pkg::pwr_lc_req_t                    pwr_lc_i,
+  output pwrmgr_pkg::pwr_lc_rsp_t                    pwr_lc_o,
   // Strap sampling override that is only used when SecVolatileRawUnlockEn = 1,
   // Otherwise this output is tied off to 0.
   output logic                                       strap_en_override_o,
@@ -337,20 +335,11 @@ module lc_ctrl
 
   logic lc_idle_d, lc_done_d;
 
-  // Assign the hardware revision constant and feed it through an anchor buffer. This ensures the
-  // individual bits remain visible in the netlist, thereby enabling metal fixes to be reflected
-  // in the hardware revision.
-  lc_hw_rev_t hw_rev;
-  assign hw_rev = '{silicon_creator_id: SiliconCreatorId,
-                    product_id:         ProductId,
-                    revision_id:        RevisionId,
-                    reserved:           '0};
-  prim_sec_anchor_buf #(
-    .Width($bits(lc_hw_rev_t))
-  ) u_hw_rev_anchor_buf (
-    .in_i(hw_rev),
-    .out_o(hw_rev_o)
-  );
+  // Assign hardware revision output
+  assign hw_rev_o = '{silicon_creator_id: SiliconCreatorId,
+                      product_id:         ProductId,
+                      revision_id:        RevisionId,
+                      reserved:           '0};
 
   // OTP Vendor control bits
   logic ext_clock_switched;
@@ -670,8 +659,8 @@ module lc_ctrl
   // and asserts the lc_escalate_en life cycle control signal.
   logic esc_scrap_state0;
   prim_esc_receiver #(
-    .N_ESC_SEV   (EscNumSeverities),
-    .PING_CNT_DW (EscPingCountWidth)
+    .N_ESC_SEV   (alert_handler_reg_pkg::N_ESC_SEV),
+    .PING_CNT_DW (alert_handler_reg_pkg::PING_CNT_DW)
   ) u_prim_esc_receiver0 (
     .clk_i,
     .rst_ni,
@@ -684,8 +673,8 @@ module lc_ctrl
   // state into a temporary "SCRAP" state named "ESCALATE".
   logic esc_scrap_state1;
   prim_esc_receiver #(
-    .N_ESC_SEV   (EscNumSeverities),
-    .PING_CNT_DW (EscPingCountWidth)
+    .N_ESC_SEV   (alert_handler_reg_pkg::N_ESC_SEV),
+    .PING_CNT_DW (alert_handler_reg_pkg::PING_CNT_DW)
   ) u_prim_esc_receiver1 (
     .clk_i,
     .rst_ni,

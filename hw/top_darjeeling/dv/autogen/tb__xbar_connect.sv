@@ -28,6 +28,8 @@
 
 wire clk_main;
 clk_rst_if clk_rst_if_main(.clk(clk_main), .rst_n(rst_n));
+wire clk_usb;
+clk_rst_if clk_rst_if_usb(.clk(clk_usb), .rst_n(rst_n));
 wire clk_io_div4;
 clk_rst_if clk_rst_if_io_div4(.clk(clk_io_div4), .rst_n(rst_n));
 
@@ -92,6 +94,7 @@ tl_if pinmux_aon_tl_if(clk_io_div4, rst_n);
 tl_if otp_ctrl__core_tl_if(clk_io_div4, rst_n);
 tl_if otp_ctrl__prim_tl_if(clk_io_div4, rst_n);
 tl_if lc_ctrl__regs_tl_if(clk_io_div4, rst_n);
+tl_if sensor_ctrl_tl_if(clk_io_div4, rst_n);
 tl_if alert_handler_tl_if(clk_io_div4, rst_n);
 tl_if sram_ctrl_ret_aon__regs_tl_if(clk_io_div4, rst_n);
 tl_if sram_ctrl_ret_aon__ram_tl_if(clk_io_div4, rst_n);
@@ -107,8 +110,6 @@ tl_if mbx5__soc_tl_if(clk_main, rst_n);
 tl_if mbx6__soc_tl_if(clk_main, rst_n);
 tl_if mbx_pcie0__soc_tl_if(clk_main, rst_n);
 tl_if mbx_pcie1__soc_tl_if(clk_main, rst_n);
-tl_if racl_ctrl_tl_if(clk_main, rst_n);
-tl_if ac_range_check_tl_if(clk_main, rst_n);
 tl_if rv_dm__dbg_tl_if(clk_main, rst_n);
 tl_if mbx_jtag__soc_tl_if(clk_main, rst_n);
 tl_if lc_ctrl__dmi_tl_if(clk_io_div4, rst_n);
@@ -130,6 +131,7 @@ initial begin
     // bypass clkmgr, force clocks directly
     force tb.dut.top_darjeeling.u_xbar_main.clk_main_i = clk_main;
     force tb.dut.top_darjeeling.u_xbar_main.clk_fixed_i = clk_io_div4;
+    force tb.dut.top_darjeeling.u_xbar_main.clk_usb_i = clk_usb;
     force tb.dut.top_darjeeling.u_xbar_peri.clk_peri_i = clk_io_div4;
     force tb.dut.top_darjeeling.u_xbar_mbx.clk_mbx_i = clk_main;
     force tb.dut.top_darjeeling.u_xbar_dbg.clk_dbg_i = clk_main;
@@ -138,6 +140,7 @@ initial begin
     // bypass rstmgr, force resets directly
     force tb.dut.top_darjeeling.u_xbar_main.rst_main_ni = rst_n;
     force tb.dut.top_darjeeling.u_xbar_main.rst_fixed_ni = rst_n;
+    force tb.dut.top_darjeeling.u_xbar_main.rst_usb_ni = rst_n;
     force tb.dut.top_darjeeling.u_xbar_peri.rst_peri_ni = rst_n;
     force tb.dut.top_darjeeling.u_xbar_mbx.rst_mbx_ni = rst_n;
     force tb.dut.top_darjeeling.u_xbar_dbg.rst_dbg_ni = rst_n;
@@ -204,6 +207,7 @@ initial begin
     `DRIVE_CHIP_TL_DEVICE_IF(otp_ctrl__core, otp_ctrl, core_tl)
     `DRIVE_CHIP_TL_DEVICE_IF(otp_ctrl__prim, otp_ctrl, prim_tl)
     `DRIVE_CHIP_TL_DEVICE_IF(lc_ctrl__regs, lc_ctrl, regs_tl)
+    `DRIVE_CHIP_TL_DEVICE_IF(sensor_ctrl, sensor_ctrl, tl)
     `DRIVE_CHIP_TL_DEVICE_IF(alert_handler, alert_handler, tl)
     `DRIVE_CHIP_TL_DEVICE_IF(sram_ctrl_ret_aon__regs, sram_ctrl_ret_aon, regs_tl)
     `DRIVE_CHIP_TL_DEVICE_IF(sram_ctrl_ret_aon__ram, sram_ctrl_ret_aon, ram_tl)
@@ -219,8 +223,6 @@ initial begin
     `DRIVE_CHIP_TL_DEVICE_IF(mbx6__soc, mbx6, soc_tl_d)
     `DRIVE_CHIP_TL_DEVICE_IF(mbx_pcie0__soc, mbx_pcie0, soc_tl_d)
     `DRIVE_CHIP_TL_DEVICE_IF(mbx_pcie1__soc, mbx_pcie1, soc_tl_d)
-    `DRIVE_CHIP_TL_DEVICE_IF(racl_ctrl, racl_ctrl, tl)
-    `DRIVE_CHIP_TL_DEVICE_IF(ac_range_check, ac_range_check, tl)
     `DRIVE_CHIP_TL_DEVICE_IF(rv_dm__dbg, rv_dm, dbg_tl_d)
     `DRIVE_CHIP_TL_DEVICE_IF(mbx_jtag__soc, mbx_jtag, soc_tl_d)
     `DRIVE_CHIP_TL_DEVICE_IF(lc_ctrl__dmi, lc_ctrl, dmi_tl)
@@ -234,9 +236,11 @@ initial begin
     xbar_clk_rst_if.wait_for_reset(.wait_posedge(1'b0));
 
     clk_rst_if_main.set_active(.drive_rst_n_val(0));
-    clk_rst_if_main.set_freq_khz(1000000000 / 1000);
+    clk_rst_if_main.set_freq_khz(100000000 / 1000);
+    clk_rst_if_usb.set_active(.drive_rst_n_val(0));
+    clk_rst_if_usb.set_freq_khz(48000000 / 1000);
     clk_rst_if_io_div4.set_active(.drive_rst_n_val(0));
-    clk_rst_if_io_div4.set_freq_khz(250000000 / 1000);
+    clk_rst_if_io_div4.set_freq_khz(24000000 / 1000);
 
   end
 end

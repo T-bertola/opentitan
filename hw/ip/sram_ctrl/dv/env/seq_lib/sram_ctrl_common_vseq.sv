@@ -79,8 +79,8 @@ class sram_ctrl_common_vseq extends sram_ctrl_base_vseq;
     // their counters. This avoids a problem where we generate a spurious request when the FIFO was
     // actually empty and lots of signals in the design become X. This will let the fifos error
     // signal stuck at X. Zeroing the backing memory avoids that problem.
-    splat_fifo_storage("tb.dut.u_tlul_adapter_sram_racl.tlul_adapter_sram.u_reqfifo", 2);
-    splat_fifo_storage("tb.dut.u_tlul_adapter_sram_racl.tlul_adapter_sram.u_sramreqfifo", 2);
+    splat_fifo_storage("tb.dut.u_tlul_adapter_sram.u_reqfifo", 2);
+    splat_fifo_storage("tb.dut.u_tlul_adapter_sram.u_sramreqfifo", 2);
 
     super.dut_init(reset_kind);
   endtask
@@ -94,16 +94,16 @@ class sram_ctrl_common_vseq extends sram_ctrl_base_vseq;
     bit[bus_params_pkg::BUS_DW-1:0] rdata;
     bit[tlul_pkg::DataIntgWidth+bus_params_pkg::BUS_DW-1:0] flip_bits;
 
-    rdata = cfg.sram_ctrl_bkdr_util_h.sram_encrypt_read32_integ(addr, cfg.scb.key, cfg.scb.nonce,
-                                                                0);
+    rdata = cfg.mem_bkdr_util_h.sram_encrypt_read32_integ(addr, cfg.scb.key, cfg.scb.nonce, 0);
+
     `DV_CHECK_STD_RANDOMIZE_WITH_FATAL(flip_bits,
         $countones(flip_bits) inside {[1:cip_base_pkg::MAX_TL_ECC_ERRORS]};)
 
     `uvm_info(`gfn, $sformatf("Backdoor change mem (addr 0x%0h) value 0x%0h by flipping bits %0h",
                               addr, rdata, flip_bits), UVM_LOW)
 
-    cfg.sram_ctrl_bkdr_util_h.sram_encrypt_write32_integ(addr, rdata, cfg.scb.key, cfg.scb.nonce, 0,
-                                                         flip_bits);
+    cfg.mem_bkdr_util_h.sram_encrypt_write32_integ(addr, rdata, cfg.scb.key, cfg.scb.nonce, 0,
+                                                   flip_bits);
   endfunction
 
   // Check internal key/nonce are reset to default
@@ -168,13 +168,13 @@ class sram_ctrl_common_vseq extends sram_ctrl_base_vseq;
       if (is_ptr_in_adapters_fifo(if_proxy.path, touching_req_fifo)) begin
         if (!enable) begin
           `uvm_info(`gfn, "Doing FI on a prim_fifo_sync. Disabling related assertions", UVM_HIGH)
-          $assertoff(0, "tb.dut.u_tlul_adapter_sram_racl.tlul_adapter_sram.u_reqfifo");
-          $assertoff(0, "tb.dut.u_tlul_adapter_sram_racl.tlul_adapter_sram.u_sramreqfifo");
-          $assertoff(0, "tb.dut.u_tlul_adapter_sram_racl.tlul_adapter_sram.u_rspfifo");
+          $assertoff(0, "tb.dut.u_tlul_adapter_sram.u_reqfifo");
+          $assertoff(0, "tb.dut.u_tlul_adapter_sram.u_sramreqfifo");
+          $assertoff(0, "tb.dut.u_tlul_adapter_sram.u_rspfifo");
         end else begin
-          $asserton(0, "tb.dut.u_tlul_adapter_sram_racl.tlul_adapter_sram.u_reqfifo");
-          $asserton(0, "tb.dut.u_tlul_adapter_sram_racl.tlul_adapter_sram.u_sramreqfifo");
-          $asserton(0, "tb.dut.u_tlul_adapter_sram_racl.tlul_adapter_sram.u_rspfifo");
+          $asserton(0, "tb.dut.u_tlul_adapter_sram.u_reqfifo");
+          $asserton(0, "tb.dut.u_tlul_adapter_sram.u_sramreqfifo");
+          $asserton(0, "tb.dut.u_tlul_adapter_sram.u_rspfifo");
         end
 
         // Disable assertions that we expect to fail if we corrupt a request FIFO. This causes us to

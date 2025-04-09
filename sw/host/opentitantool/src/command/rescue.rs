@@ -10,7 +10,6 @@ use std::any::Any;
 use std::fs::File;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::Duration;
 
 use opentitanlib::app::command::CommandDispatch;
 use opentitanlib::app::TransportWrapper;
@@ -18,7 +17,6 @@ use opentitanlib::chip::boot_svc::BootSlot;
 use opentitanlib::chip::helper::{OwnershipActivateParams, OwnershipUnlockParams};
 use opentitanlib::image::image::Image;
 use opentitanlib::image::manifest::ManifestKind;
-use opentitanlib::ownership::{OwnerBlock, TlvHeader};
 use opentitanlib::rescue::serial::RescueSerial;
 use opentitanlib::util::file::FromReader;
 use opentitanlib::util::parse_int::ParseInt;
@@ -48,13 +46,6 @@ pub struct Firmware {
         help = "Wait after upload (no automatic reboot)"
     )]
     wait: bool,
-    #[arg(
-        long,
-        default_value_t = true,
-        action = clap::ArgAction::Set,
-        help = "Render unbootable the slot not being programmed"
-    )]
-    erase_other_slot: bool,
     #[arg(
         long,
         default_value_t = true,
@@ -98,21 +89,16 @@ impl CommandDispatch for Firmware {
             prev_baudrate = uart.get_baudrate()?;
             rescue.set_baud(rate)?;
         }
-        rescue.wait()?;
-        if self.erase_other_slot {
-            // Invalidate the other slot by overwriting its header.
-            if self.slot == BootSlot::SlotB {
-                rescue.update_firmware(BootSlot::SlotA, &vec![0xFF; 2048])?;
-            } else {
-                rescue.update_firmware(BootSlot::SlotB, &vec![0xFF; 2048])?;
-            }
+        if self.wait {
+            rescue.wait()?;
         }
         rescue.update_firmware(self.slot, payload)?;
         if self.rate.is_some() {
-            rescue.set_baud(prev_baudrate)?;
-        }
-        if !self.wait {
-            transport.reset_target(Duration::from_millis(50), false)?;
+            if self.wait {
+                rescue.set_baud(prev_baudrate)?;
+            } else {
+                uart.set_baudrate(prev_baudrate)?;
+            }
         }
         Ok(None)
     }
@@ -143,7 +129,7 @@ impl CommandDispatch for GetBootLog {
         let rescue = RescueSerial::new(uart);
         rescue.enter(transport, self.reset_target)?;
         if self.raw {
-            let data = rescue.get_raw(RescueSerial::BOOT_LOG)?;
+            let data = rescue.get_boot_log_raw()?;
             Ok(Some(Box::new(RawBytes(data))))
         } else {
             let data = rescue.get_boot_log()?;
@@ -177,44 +163,10 @@ impl CommandDispatch for GetBootSvc {
         let rescue = RescueSerial::new(uart);
         rescue.enter(transport, self.reset_target)?;
         if self.raw {
-            let data = rescue.get_raw(RescueSerial::BOOT_SVC_RSP)?;
+            let data = rescue.get_boot_svc_raw()?;
             Ok(Some(Box::new(RawBytes(data))))
         } else {
             let data = rescue.get_boot_svc()?;
-            Ok(Some(Box::new(data)))
-        }
-    }
-}
-
-#[derive(Debug, Args)]
-pub struct GetDeviceId {
-    #[command(flatten)]
-    params: UartParams,
-    #[arg(
-        long,
-        default_value_t = true,
-        action = clap::ArgAction::Set,
-        help = "Reset the target to enter rescue mode"
-    )]
-    reset_target: bool,
-    #[arg(long, short, default_value = "false")]
-    raw: bool,
-}
-
-impl CommandDispatch for GetDeviceId {
-    fn run(
-        &self,
-        _context: &dyn Any,
-        transport: &TransportWrapper,
-    ) -> Result<Option<Box<dyn Annotate>>> {
-        let uart = self.params.create(transport)?;
-        let rescue = RescueSerial::new(uart);
-        rescue.enter(transport, self.reset_target)?;
-        if self.raw {
-            let data = rescue.get_raw(RescueSerial::OT_ID)?;
-            Ok(Some(Box::new(RawBytes(data))))
-        } else {
-            let data = rescue.get_device_id()?;
             Ok(Some(Box::new(data)))
         }
     }
@@ -403,91 +355,6 @@ impl CommandDispatch for SetOwnerConfig {
     }
 }
 
-#[derive(Debug, Args)]
-pub struct GetOwnerConfig {
-    #[command(flatten)]
-    params: UartParams,
-    #[arg(
-        long,
-        default_value_t = true,
-        action = clap::ArgAction::Set,
-        help = "Reset the target to enter rescue mode"
-    )]
-    reset_target: bool,
-    #[arg(long, short, default_value = "false", conflicts_with = "output")]
-    raw: bool,
-    #[arg(long, short, default_value = "0", help = "Owner page number")]
-    page: u32,
-    #[arg(
-        short,
-        long,
-        conflicts_with = "raw",
-        help = "Write the binary form to a file"
-    )]
-    output: Option<PathBuf>,
-}
-
-impl CommandDispatch for GetOwnerConfig {
-    fn run(
-        &self,
-        _context: &dyn Any,
-        transport: &TransportWrapper,
-    ) -> Result<Option<Box<dyn Annotate>>> {
-        let page = match self.page {
-            0 => RescueSerial::GET_OWNER_PAGE0,
-            1 => RescueSerial::GET_OWNER_PAGE1,
-            _ => return Err(anyhow!("Unsupported page {}", self.page)),
-        };
-        let uart = self.params.create(transport)?;
-        let rescue = RescueSerial::new(uart);
-        rescue.enter(transport, self.reset_target)?;
-        let data = rescue.get_raw(page)?;
-        if let Some(output) = &self.output {
-            std::fs::write(output, &data)?;
-            Ok(None)
-        } else if self.raw {
-            Ok(Some(Box::new(RawBytes(data))))
-        } else {
-            let mut cursor = std::io::Cursor::new(&data);
-            let header = TlvHeader::read(&mut cursor)?;
-            Ok(Some(Box::new(OwnerBlock::read(&mut cursor, header)?)))
-        }
-    }
-}
-
-#[derive(Debug, Args)]
-pub struct EraseOwner {
-    #[command(flatten)]
-    params: UartParams,
-    #[arg(
-        long,
-        default_value_t = true,
-        action = clap::ArgAction::Set,
-        help = "Reset the target to enter rescue mode"
-    )]
-    reset_target: bool,
-    #[arg(long, default_value_t = false, help = "Really erase the owner config")]
-    really: bool,
-}
-
-impl CommandDispatch for EraseOwner {
-    fn run(
-        &self,
-        _context: &dyn Any,
-        transport: &TransportWrapper,
-    ) -> Result<Option<Box<dyn Annotate>>> {
-        if self.really {
-            let uart = self.params.create(transport)?;
-            let rescue = RescueSerial::new(uart);
-            rescue.enter(transport, self.reset_target)?;
-            rescue.erase_owner()?;
-            Ok(None)
-        } else {
-            Err(anyhow!("The owner may only be erased on DEV lifecycle-state chips with a ROM_EXT configured to permit owner erasing.\n\nUse the `--really` flag to send the command."))
-        }
-    }
-}
-
 #[derive(Debug, Subcommand, CommandDispatch)]
 pub enum BootSvcCommand {
     Get(GetBootSvc),
@@ -500,10 +367,7 @@ pub enum BootSvcCommand {
 pub enum RescueCommand {
     #[command(subcommand)]
     BootSvc(BootSvcCommand),
-    EraseOwner(EraseOwner),
     GetBootLog(GetBootLog),
-    GetDeviceId(GetDeviceId),
     Firmware(Firmware),
     SetOwnerConfig(SetOwnerConfig),
-    GetOwnerConfig(GetOwnerConfig),
 }

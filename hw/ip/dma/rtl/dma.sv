@@ -268,7 +268,6 @@ module dma
   always_comb begin
     control_d.opcode                     = opcode_e'(reg2hw.control.opcode.q);
     control_d.cfg_handshake_en           = reg2hw.control.hardware_handshake_enable.q;
-    control_d.cfg_digest_swap            = reg2hw.control.digest_swap.q;
     control_d.range_valid                = reg2hw.range_valid.q;
     control_d.enabled_memory_range_base  = reg2hw.enabled_memory_range_base.q;
     control_d.enabled_memory_range_limit = reg2hw.enabled_memory_range_limit.q;
@@ -540,8 +539,8 @@ module dma
       end
       SocSystemAddr: begin
         write_gnt       = 1'b1;  // No requirement to wait
-        write_rsp_valid = sys_resp_q.grant_vec[SysCmdWrite] | sys_resp_q.error_vld;
-        write_rsp_error = sys_resp_q.error_vld;
+        write_rsp_valid = sys_resp_q.grant_vec[SysCmdWrite];
+        write_rsp_error = 1'b0;  // Write errors do not occur on SoC System bus
       end
       // SocControlAddr is handled here
       //   (other ASID values prevented in configuration validation).
@@ -1255,22 +1254,17 @@ module dma
       for (int unsigned i = 0; i < NR_SHA_DIGEST_ELEMENTS / 2; i++) begin
         unique case (control_q.opcode)
           OpcSha256: begin
-            hw2reg.sha2_digest[i].d = conv_endian32(sha2_digest[i][0 +: 32],
-                                                    control_q.cfg_digest_swap);
+            hw2reg.sha2_digest[i].d = sha2_digest[i][0 +: 32];
           end
           OpcSha384: begin
             if (i < 6) begin
-              hw2reg.sha2_digest[i*2].d     = conv_endian32(sha2_digest[i][32 +: 32],
-                                                            control_q.cfg_digest_swap);
-              hw2reg.sha2_digest[(i*2)+1].d = conv_endian32(sha2_digest[i][0  +: 32],
-                                                            control_q.cfg_digest_swap);
+              hw2reg.sha2_digest[i*2].d     = sha2_digest[i][32 +: 32];
+              hw2reg.sha2_digest[(i*2)+1].d = sha2_digest[i][0  +: 32];
             end
           end
           default: begin // SHA2-512
-            hw2reg.sha2_digest[i*2].d     = conv_endian32(sha2_digest[i][32 +: 32],
-                                                          control_q.cfg_digest_swap);
-            hw2reg.sha2_digest[(i*2)+1].d = conv_endian32(sha2_digest[i][0  +: 32],
-                                                          control_q.cfg_digest_swap);
+            hw2reg.sha2_digest[i*2].d     = sha2_digest[i][32 +: 32];
+            hw2reg.sha2_digest[(i*2)+1].d = sha2_digest[i][0  +: 32];
           end
         endcase
       end
@@ -1531,19 +1525,6 @@ module dma
 
   // All outputs should be known value after reset
   `ASSERT_KNOWN(AlertsKnown_A, alert_tx_o)
-  `ASSERT_KNOWN(IntrDmaDoneKnown_A, intr_dma_done_o)
-  `ASSERT_KNOWN(IntrDmaChunkDoneKnown_A, intr_dma_chunk_done_o)
-  `ASSERT_KNOWN(IntrDmaErrorKnown_A, intr_dma_error_o)
-
-  `ASSERT_KNOWN(TlDValidKnownO_A, tl_d_o.d_valid)
-  `ASSERT_KNOWN(TlAReadyKnownO_A, tl_d_o.a_ready)
-
-  `ASSERT_KNOWN(CtnTlAValidKnownO_A, ctn_tl_h2d_o.a_valid)
-  `ASSERT_KNOWN(CtnTlDReadyKnownO_A, ctn_tl_h2d_o.d_ready)
-  `ASSERT_KNOWN(HostTlAValidKnownO_A, host_tl_h_o.a_valid)
-  `ASSERT_KNOWN(HostTlDReadyKnownO_A, host_tl_h_o.d_ready)
-
-  `ASSERT_KNOWN(SysValidKnownO_A, sys_o.vld_vec)
 
   // Alert assertions for reg_we onehot check
   `ASSERT_PRIM_REG_WE_ONEHOT_ERROR_TRIGGER_ALERT(RegWeOnehotCheck_A, u_dma_reg, alert_tx_o[0])

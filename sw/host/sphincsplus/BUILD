@@ -2,7 +2,7 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 
-load("@rules_rust_bindgen//:defs.bzl", "rust_bindgen_library")
+load("@rules_rust//bindgen:defs.bzl", "rust_bindgen_library")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -60,7 +60,6 @@ rust_library(
     deps = [
         ":bindgen_sha2_128s_simple",
         ":bindgen_shake_128s_simple",
-        "@crate_index//:asn1",
         "@crate_index//:pem-rfc7468",
         "@crate_index//:serde",
         "@crate_index//:strum",

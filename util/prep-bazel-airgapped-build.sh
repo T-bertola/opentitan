@@ -115,13 +115,14 @@ if [[ ${AIRGAPPED_DIR_CONTENTS} == "ALL" || \
     --output bazel
   chmod +x bazel
 
-  # Make Bazel fetch its own dependencies to the repository cache:
+  # Make Bazel sync its own dependencies to the repository cache:
   # https://bazel.build/run/build#repository_cache_with_bazel_7_or_later
   mkdir -p "${BAZEL_AIRGAPPED_DIR}/empty_workspace"
   pushd "${BAZEL_AIRGAPPED_DIR}/empty_workspace"
     touch MODULE.bazel
+    touch WORKSPACE
     cp "${REPO_TOP}/.bazelversion" .
-    bazel fetch --repository_cache="${BAZEL_AIRGAPPED_DIR}/${BAZEL_CACHEDIR}"
+    bazel sync --repository_cache="${BAZEL_AIRGAPPED_DIR}/${BAZEL_CACHEDIR}"
   popd
   rm -rf "${BAZEL_AIRGAPPED_DIR}/empty_workspace"
 fi
@@ -140,10 +141,13 @@ if [[ ${AIRGAPPED_DIR_CONTENTS} == "ALL" || \
   ${BAZELISK} fetch \
     --repository_cache=${BAZEL_AIRGAPPED_DIR}/${BAZEL_CACHEDIR} \
     //... \
-    @lowrisc_rv32imcb_toolchain//... \
+    @lowrisc_rv32imcb_files//... \
     @local_config_platform//... \
+    @python3_toolchains//... \
     @riscv-compliance//... \
     @rules_foreign_cc//toolchains/... \
+    @ninja_1.11.0_linux//... \
+    @cmake-3.23.2-linux-x86_64//... \
   # We don't need all bitstreams in the cache, we just need the latest one so
   # that the cache is "initialized" and "offline" mode will work correctly.
   mkdir -p ${BAZEL_AIRGAPPED_DIR}/${BAZEL_BITSTREAMS_CACHEDIR}

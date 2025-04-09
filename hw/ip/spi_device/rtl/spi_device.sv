@@ -8,15 +8,12 @@
 `include "prim_assert.sv"
 
 module spi_device
-  import spi_device_reg_pkg::*;
+  import spi_device_reg_pkg::NumAlerts;
+  import spi_device_reg_pkg::SPI_DEVICE_EGRESS_BUFFER_IDX;
+  import spi_device_reg_pkg::SPI_DEVICE_INGRESS_BUFFER_IDX;
 #(
-  parameter logic [NumAlerts-1:0] AlertAsyncOn         = {NumAlerts{1'b1}},
-  parameter spi_device_pkg::sram_type_e SramType       = spi_device_pkg::DefaultSramType,
-  parameter bit                             EnableRacl                    = 1'b0,
-  parameter bit                             RaclErrorRsp                  = EnableRacl,
-  parameter top_racl_pkg::racl_policy_sel_t RaclPolicySelVec[73]          = '{73{0}},
-  parameter top_racl_pkg::racl_policy_sel_t RaclPolicySelWinEgressbuffer  = 0,
-  parameter top_racl_pkg::racl_policy_sel_t RaclPolicySelWinIngressbuffer = 0
+  parameter logic [NumAlerts-1:0] AlertAsyncOn = {NumAlerts{1'b1}},
+  parameter spi_device_pkg::sram_type_e SramType = spi_device_pkg::DefaultSramType
 ) (
   input clk_i,
   input rst_ni,
@@ -28,10 +25,6 @@ module spi_device
   // Alerts
   input  prim_alert_pkg::alert_rx_t [NumAlerts-1:0] alert_rx_i,
   output prim_alert_pkg::alert_tx_t [NumAlerts-1:0] alert_tx_o,
-
-  // RACL interface
-  input  top_racl_pkg::racl_policy_vec_t            racl_policies_i,
-  output top_racl_pkg::racl_error_log_t             racl_error_o,
 
   // SPI Interface
   input              cio_sck_i,
@@ -85,22 +78,6 @@ module spi_device
   localparam int unsigned TpmRdFifoWidth  = spi_device_reg_pkg::TpmRdFifoWidth;
 
   // Derived parameters
-  localparam top_racl_pkg::racl_range_t [0:0] RaclPolicySelRangesEgressbuffer = '{
-    '{
-      base:  {top_pkg::TL_AW{1'b0}},
-      limit: {top_pkg::TL_AW{1'b1}},
-      policy_sel: RaclPolicySelWinEgressbuffer,
-      enable: 1'b1
-    }
-  };
-  localparam top_racl_pkg::racl_range_t  [0:0] RaclPolicySelRangesIngressbuffer = '{
-    '{
-      base:  {top_pkg::TL_AW{1'b0}},
-      limit: {top_pkg::TL_AW{1'b1}},
-      policy_sel: RaclPolicySelWinIngressbuffer,
-      enable: 1'b1
-    }
-  };
 
   logic clk_spi_in, clk_spi_in_muxed, clk_spi_in_buf;   // clock for latch SDI
   logic clk_spi_out, clk_spi_out_muxed, clk_spi_out_buf; // clock for driving SDO
@@ -108,25 +85,6 @@ module spi_device
 
   spi_device_reg_pkg::spi_device_reg2hw_t reg2hw;
   spi_device_reg_pkg::spi_device_hw2reg_t hw2reg;
-
-  top_racl_pkg::racl_error_log_t racl_error[3];
-  if (EnableRacl) begin : gen_racl_error_arb
-    // Arbitrate between all simultaneously valid error log requests.
-    prim_racl_error_arb #(
-      .N ( 3 )
-    ) u_prim_err_arb (
-      .clk_i,
-      .rst_ni,
-      .error_log_i ( racl_error   ),
-      .error_log_o ( racl_error_o )
-    );
-  end else begin : gen_no_racl_error_arb
-    logic unused_signals;
-    always_comb begin
-      unused_signals = ^{racl_error[0] ^ racl_error[1] ^ racl_error[2]};
-      racl_error_o   = '0;
-    end
-  end
 
   tlul_pkg::tl_h2d_t tl_sram_h2d[2];
   tlul_pkg::tl_d2h_t tl_sram_d2h[2];
@@ -1699,15 +1657,12 @@ module spi_device
   assign tl_sram_ingress_h2d = tl_sram_h2d[SPI_DEVICE_INGRESS_BUFFER_IDX];
   assign tl_sram_d2h[SPI_DEVICE_INGRESS_BUFFER_IDX] = tl_sram_ingress_d2h;
 
-  tlul_adapter_sram_racl #(
-    .SramAw           (SramAw),
-    .SramDw           (SramDw),
-    .Outstanding      (1),
-    .ErrOnRead        (1), // write-only memory window
-    .ByteAccess       (0),
-    .EnableRacl       (EnableRacl),
-    .RaclErrorRsp     (RaclErrorRsp),
-    .RaclPolicySelNumRanges(1)
+  tlul_adapter_sram #(
+    .SramAw      (SramAw),
+    .SramDw      (SramDw),
+    .Outstanding (1),
+    .ErrOnRead   (1), // write-only memory window
+    .ByteAccess  (0)
   ) u_tlul2sram_egress (
     .clk_i,
     .rst_ni,
@@ -1731,21 +1686,15 @@ module spi_device
     .readback_en_i              (prim_mubi_pkg::MuBi4False),
     .readback_error_o           (),
     .wr_collision_i             (1'b0),
-    .write_pending_i            (1'b0),
-    .racl_policies_i            (racl_policies_i),
-    .racl_error_o               (racl_error[1]),
-    .racl_policy_sel_ranges     (RaclPolicySelRangesEgressbuffer)
+    .write_pending_i            (1'b0)
   );
 
-  tlul_adapter_sram_racl #(
-    .SramAw           (SramAw),
-    .SramDw           (SramDw),
-    .Outstanding      (1),
-    .ErrOnWrite       (1), // read-only memory window
-    .ByteAccess       (0),
-    .EnableRacl       (EnableRacl),
-    .RaclErrorRsp     (RaclErrorRsp),
-    .RaclPolicySelNumRanges(1)
+  tlul_adapter_sram #(
+    .SramAw      (SramAw),
+    .SramDw      (SramDw),
+    .Outstanding (1),
+    .ErrOnWrite  (1), // read-only memory window
+    .ByteAccess  (0)
   ) u_tlul2sram_ingress (
     .clk_i,
     .rst_ni,
@@ -1769,10 +1718,7 @@ module spi_device
     .readback_en_i              (prim_mubi_pkg::MuBi4False),
     .readback_error_o           (),
     .wr_collision_i             (1'b0),
-    .write_pending_i            (1'b0),
-    .racl_policies_i            (racl_policies_i),
-    .racl_error_o               (racl_error[2]),
-    .racl_policy_sel_ranges     (RaclPolicySelRangesIngressbuffer)
+    .write_pending_i            (1'b0)
   );
   assign sys_sram_l2m[SysSramFwEgress].wstrb =
     sram_mask2strb(sys_sram_l2m_fw_wmask[SPI_DEVICE_EGRESS_BUFFER_IDX]);
@@ -1906,11 +1852,7 @@ module spi_device
 
   // Register module
   logic [NumAlerts-1:0] alert_test, alerts;
-  spi_device_reg_top #(
-    .EnableRacl        ( EnableRacl       ),
-    .RaclErrorRsp      ( RaclErrorRsp     ),
-    .RaclPolicySelVec  ( RaclPolicySelVec )
-  ) u_reg (
+  spi_device_reg_top u_reg (
     .clk_i,
     .rst_ni,
 
@@ -1922,10 +1864,6 @@ module spi_device
 
     .reg2hw,
     .hw2reg,
-
-    // RACL interface
-    .racl_policies_i  (racl_policies_i),
-    .racl_error_o     (racl_error[0]),
 
     // SEC_CM: BUS.INTEGRITY
     .intg_err_o (alerts[0])
@@ -1970,8 +1908,6 @@ module spi_device
   `ASSERT_KNOWN(IntrTpmRdfifoDropOKnown, intr_tpm_rdfifo_drop_o)
 
   `ASSERT_KNOWN(AlertKnownO_A,         alert_tx_o)
-
-  `ASSERT_KNOWN(RaclErrorValidKnown_A, racl_error_o.valid)
 
   // Assume the tpm_en is set when TPM transaction is idle.
   `ASSUME(TpmEnableWhenTpmCsbIdle_M, $rose(cfg_tpm_en) |-> cio_tpm_csb_i)

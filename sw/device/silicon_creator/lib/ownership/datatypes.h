@@ -21,27 +21,22 @@ extern "C" {
  * An owner_key can be either a ECDSA P256 or SPX+ key.  The type of the key
  * material will be determined by a separate field on the owner block
  */
-typedef union owner_key {
-  /** ECDSA P256 public key */
-  ecdsa_p256_public_key_t ecdsa;
-  /** Enough space to hold an ECDSA key and a SPX+ key for hybrid schemes */
-  uint32_t raw[16 + 8];
+typedef struct owner_key {
+  uint32_t key[16];
 } owner_key_t;
 
 /**
  * An owner_signature is an ECDSA P256 signature.
  */
-typedef union owner_signature {
-  /** ECDSA P256 signature key */
-  ecdsa_p256_signature_t ecdsa;
-  uint32_t raw[16];
+typedef struct owner_signature {
+  uint32_t signature[16];
 } owner_signature_t;
 
 typedef enum ownership_state {
   /* Locked Owner: `OWND`. */
   kOwnershipStateLockedOwner = 0x444e574f,
-  /* Locked Update: `USLF`. */
-  kOwnershipStateUnlockedSelf = 0x464c5355,
+  /* Locked Update: `LUPD`. */
+  kOwnershipStateLockedUpdate = 0x4450554c,
   /* Unlocked Any: `UANY`. */
   kOwnershipStateUnlockedAny = 0x594e4155,
   /* Unlocked Endorsed: `UEND`. */
@@ -61,30 +56,6 @@ typedef enum ownership_key_alg {
   kOwnershipKeyAlgSpxq20 = 0x30327153,
 } ownership_key_alg_t;
 
-typedef enum ownership_update_mode {
-  /** Update mode open: `OPEN` (unlock key has full power) */
-  kOwnershipUpdateModeOpen = 0x4e45504f,
-  /** Update mode self: `SELF` (unlock key only unlocks to UnlockedSelf) */
-  kOwnershipUpdateModeSelf = 0x464c4553,
-  /**
-   * Update mode NewVersion: `NEWV`
-   * (unlock key can't unlock; accept new owner configs from self-same owner
-   * if the config_version is newer)
-   */
-  kOwnershipUpdateModeNewVersion = 0x5657454e,
-  /**
-   * Update mode SelfVersion: `SELV`
-   * (unlock key only unlocks to UnlockedSelf; accept new owner configs from
-   * self-same owner if the config_version is newer)
-   */
-  kOwnershipUpdateModeSelfVersion = 0x564c4553,
-} ownership_update_mode_t;
-
-typedef enum lock_constraint {
-  /** No locking constraint: `~~~~`. */
-  kLockConstraintNone = 0x7e7e7e7e,
-} lock_constraint_t;
-
 typedef enum tlv_tag {
   /** Owner struct: `OWNR`. */
   kTlvTagOwner = 0x524e574f,
@@ -100,15 +71,9 @@ typedef enum tlv_tag {
   kTlvTagNotPresent = 0x5a5a5a5a,
 } tlv_tag_t;
 
-typedef struct struct_version {
-  uint8_t major;
-  uint8_t minor;
-} struct_version_t;
-
 typedef struct tlv_header {
   uint32_t tag;
-  uint16_t length;
-  struct_version_t version;
+  uint32_t length;
 } tlv_header_t;
 
 typedef enum owner_sram_exec_mode {
@@ -128,25 +93,16 @@ typedef struct owner_block {
    * Header identifying this struct.
    * tag: `OWNR`.
    * length: 2048.
-   * version: 0
    */
   tlv_header_t header;
-  /** Configuraion version (monotonically increasing per owner) */
-  uint32_t config_version;
+  /** Version of the owner struct.  Currently `0`. */
+  uint32_t version;
   /** SRAM execution configuration (DisabledLocked, Disabled, Enabled). */
   uint32_t sram_exec_mode;
   /** Ownership key algorithm (currently, only ECDSA is supported). */
   uint32_t ownership_key_alg;
-  /** Ownership update mode (one of OPEN, SELF, NEWV) */
-  uint32_t update_mode;
-  /** Set the minimum security version to this value (UINT32_MAX: no change) */
-  uint32_t min_security_version_bl0;
-  /** The device ID locking constraint */
-  uint32_t lock_constraint;
-  /** The device ID to which this config applies */
-  uint32_t device_id[8];
   /** Reserved space for future use. */
-  uint32_t reserved[16];
+  uint32_t reserved[3];
   /** Owner public key. */
   owner_key_t owner_key;
   /** Owner's Activate public key. */
@@ -154,7 +110,7 @@ typedef struct owner_block {
   /** Owner's Unlock public key. */
   owner_key_t unlock_key;
   /** Data region to hold the other configuration structs. */
-  uint8_t data[1536];
+  uint8_t data[1728];
   /** Signature over the owner block with the Owner private key. */
   owner_signature_t signature;
   /** A sealing value to seal the owner block to a specific chip. */
@@ -162,18 +118,14 @@ typedef struct owner_block {
 } owner_block_t;
 
 OT_ASSERT_MEMBER_OFFSET(owner_block_t, header, 0);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, config_version, 8);
+OT_ASSERT_MEMBER_OFFSET(owner_block_t, version, 8);
 OT_ASSERT_MEMBER_OFFSET(owner_block_t, sram_exec_mode, 12);
 OT_ASSERT_MEMBER_OFFSET(owner_block_t, ownership_key_alg, 16);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, update_mode, 20);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, min_security_version_bl0, 24);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, lock_constraint, 28);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, device_id, 32);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, reserved, 64);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, owner_key, 128);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, activate_key, 224);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, unlock_key, 320);
-OT_ASSERT_MEMBER_OFFSET(owner_block_t, data, 416);
+OT_ASSERT_MEMBER_OFFSET(owner_block_t, reserved, 20);
+OT_ASSERT_MEMBER_OFFSET(owner_block_t, owner_key, 32);
+OT_ASSERT_MEMBER_OFFSET(owner_block_t, activate_key, 96);
+OT_ASSERT_MEMBER_OFFSET(owner_block_t, unlock_key, 160);
+OT_ASSERT_MEMBER_OFFSET(owner_block_t, data, 224);
 OT_ASSERT_MEMBER_OFFSET(owner_block_t, signature, 1952);
 OT_ASSERT_MEMBER_OFFSET(owner_block_t, seal, 2016);
 OT_ASSERT_SIZE(owner_block_t, 2048);
@@ -203,19 +155,14 @@ typedef struct owner_application_key {
   tlv_header_t header;
   /** Key algorithm.  One of ECDSA, SPX+ or SPXq20. */
   uint32_t key_alg;
-  union {
-    struct {
-      /** Key domain.  Recognized values: PROD, DEV, TEST */
-      uint32_t key_domain;
-      /** Key diversifier.
-       *
-       * This value is concatenated to key_domain to create an 8 word
-       * diversification constant to be programmed into the keymgr.
-       */
-      uint32_t key_diversifier[7];
-    };
-    uint32_t raw_diversifier[8];
-  };
+  /** Key domain.  Recognized values: PROD, DEV, TEST */
+  uint32_t key_domain;
+  /** Key diversifier.
+   *
+   * This value is concatenated to key_domain to create an 8 word
+   * diversification constant to be programmed into the keymgr.
+   */
+  uint32_t key_diversifier[7];
   /** Usage constraint must match manifest header's constraint */
   uint32_t usage_constraint;
   /** Key material.  Varies by algorithm type. */
@@ -234,15 +181,6 @@ OT_ASSERT_MEMBER_OFFSET(owner_application_key_t, key_diversifier, 16);
 OT_ASSERT_MEMBER_OFFSET(owner_application_key_t, usage_constraint, 44);
 OT_ASSERT_MEMBER_OFFSET(owner_application_key_t, data, 48);
 OT_ASSERT_SIZE(owner_application_key_t, 464);
-
-enum {
-  kTlvLenApplicationKeyRsa =
-      offsetof(owner_application_key_t, data) + sizeof(sigverify_rsa_key_t),
-  kTlvLenApplicationKeySpx =
-      offsetof(owner_application_key_t, data) + sizeof(sigverify_spx_key_t),
-  kTlvLenApplicationKeyEcdsa =
-      offsetof(owner_application_key_t, data) + sizeof(ecdsa_p256_public_key_t),
-};
 
 // clang-format off
 /**
@@ -341,7 +279,7 @@ OT_ASSERT_SIZE(owner_flash_info_config_t, 8);
 typedef struct owner_rescue_config {
   /**
    * Header identifiying this struct.
-   * tag: `RESQ`.
+   * tag: `RSCU`.
    * length: 16 + sizeof(command_allow).
    */
   tlv_header_t header;

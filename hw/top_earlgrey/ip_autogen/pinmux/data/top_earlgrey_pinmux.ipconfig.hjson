@@ -16,6 +16,5 @@
     enable_usb_wakeup: true
     enable_strap_sampling: true
     topname: earlgrey
-    uniquified_modules: {}
   }
 }

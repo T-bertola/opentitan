@@ -9,7 +9,6 @@ use std::time::Duration;
 use crate::app::TransportWrapper;
 use crate::chip::boot_log::BootLog;
 use crate::chip::boot_svc::{BootSlot, BootSvc, OwnershipActivateRequest, OwnershipUnlockRequest};
-use crate::chip::device_id::DeviceId;
 use crate::io::uart::Uart;
 use crate::rescue::xmodem::Xmodem;
 use crate::rescue::RescueError;
@@ -31,10 +30,6 @@ impl RescueSerial {
     pub const BOOT_SVC_REQ: [u8; 4] = *b"BREQ";
     pub const BOOT_SVC_RSP: [u8; 4] = *b"BRSP";
     pub const OWNER_BLOCK: [u8; 4] = *b"OWNR";
-    pub const GET_OWNER_PAGE0: [u8; 4] = *b"OPG0";
-    pub const GET_OWNER_PAGE1: [u8; 4] = *b"OPG1";
-    pub const OT_ID: [u8; 4] = *b"OTID";
-    pub const ERASE_OWNER: [u8; 4] = *b"KLBR";
     pub const WAIT: [u8; 4] = *b"WAIT";
 
     const BAUD_115K: [u8; 4] = *b"115K";
@@ -79,14 +74,8 @@ impl RescueSerial {
             _ => return Err(RescueError::BadMode(format!("Unsupported badrate {baud}")).into()),
         };
 
-        // Request to change rates.  We don't use `set_mode` here because changing
-        // rates isn't a "mode" request and doesn't respond the same way.
-        self.uart.write(&Self::BAUD)?;
-        self.uart.write(b"\r")?;
-        let result = UartConsole::wait_for(&*self.uart, r"(ok|error):.*\r\n", Self::ONE_SECOND)?;
-        if result[1] == "error" {
-            return Err(RescueError::BadMode(result[0].clone()).into());
-        }
+        // Request to change rates.
+        self.set_mode(Self::BAUD)?;
 
         // Send the new rate and check for success.
         self.uart.write(&symbol)?;
@@ -103,13 +92,7 @@ impl RescueSerial {
         self.uart.write(&mode)?;
         let enter = b'\r';
         self.uart.write(std::slice::from_ref(&enter))?;
-        let mode = std::str::from_utf8(&mode)?;
-        let result = UartConsole::wait_for(
-            &*self.uart,
-            &format!("mode: {mode}\r\n(ok|error):.*\r\n"),
-            Self::ONE_SECOND,
-        )?;
-
+        let result = UartConsole::wait_for(&*self.uart, r"(ok|error):.*\r\n", Self::ONE_SECOND)?;
         if result[1] == "error" {
             return Err(RescueError::BadMode(result[0].clone()).into());
         }
@@ -137,27 +120,30 @@ impl RescueSerial {
         Ok(())
     }
 
-    pub fn get_raw(&self, mode: [u8; 4]) -> Result<Vec<u8>> {
-        self.set_mode(mode)?;
-        let mut data = Vec::new();
+    pub fn get_boot_log_raw(&self) -> Result<Vec<u8>> {
+        self.set_mode(Self::BOOT_LOG)?;
+        let mut blog = Vec::new();
         let xm = Xmodem::new();
-        xm.receive(&*self.uart, &mut data)?;
-        Ok(data)
+        xm.receive(&*self.uart, &mut blog)?;
+        Ok(blog)
     }
 
     pub fn get_boot_log(&self) -> Result<BootLog> {
-        let blog = self.get_raw(Self::BOOT_LOG)?;
+        let blog = self.get_boot_log_raw()?;
         Ok(BootLog::try_from(blog.as_slice())?)
     }
 
-    pub fn get_boot_svc(&self) -> Result<BootSvc> {
-        let bsvc = self.get_raw(Self::BOOT_SVC_RSP)?;
-        Ok(BootSvc::try_from(bsvc.as_slice())?)
+    pub fn get_boot_svc_raw(&self) -> Result<Vec<u8>> {
+        self.set_mode(Self::BOOT_SVC_RSP)?;
+        let mut bsvc = Vec::new();
+        let xm = Xmodem::new();
+        xm.receive(&*self.uart, &mut bsvc)?;
+        Ok(bsvc)
     }
 
-    pub fn get_device_id(&self) -> Result<DeviceId> {
-        let id = self.get_raw(Self::OT_ID)?;
-        DeviceId::read(&mut std::io::Cursor::new(&id))
+    pub fn get_boot_svc(&self) -> Result<BootSvc> {
+        let bsvc = self.get_boot_svc_raw()?;
+        Ok(BootSvc::try_from(bsvc.as_slice())?)
     }
 
     pub fn set_boot_svc_raw(&self, data: &[u8]) -> Result<()> {
@@ -189,11 +175,6 @@ impl RescueSerial {
         self.set_mode(Self::OWNER_BLOCK)?;
         let xm = Xmodem::new();
         xm.send(&*self.uart, data)?;
-        Ok(())
-    }
-
-    pub fn erase_owner(&self) -> Result<()> {
-        self.set_mode(Self::ERASE_OWNER)?;
         Ok(())
     }
 }

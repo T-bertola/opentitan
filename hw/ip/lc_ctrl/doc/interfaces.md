@@ -34,7 +34,7 @@ Referring to the [Comportable guideline for peripheral device functionality](htt
 | esc_scrap_state0_rx      | prim_esc_pkg::esc_rx             | uni     | req   |       1 |                                                                                                                                                                                                                                                                                 |
 | esc_scrap_state1_tx      | prim_esc_pkg::esc_tx             | uni     | rcv   |       1 |                                                                                                                                                                                                                                                                                 |
 | esc_scrap_state1_rx      | prim_esc_pkg::esc_rx             | uni     | req   |       1 |                                                                                                                                                                                                                                                                                 |
-| pwr_lc                   | lc_ctrl_pkg::pwr_lc              | req_rsp | rsp   |       1 |                                                                                                                                                                                                                                                                                 |
+| pwr_lc                   | pwrmgr_pkg::pwr_lc               | req_rsp | rsp   |       1 |                                                                                                                                                                                                                                                                                 |
 | lc_otp_vendor_test       | otp_ctrl_pkg::lc_otp_vendor_test | req_rsp | req   |       1 |                                                                                                                                                                                                                                                                                 |
 | otp_lc_data              | otp_ctrl_pkg::otp_lc_data        | uni     | rcv   |       1 |                                                                                                                                                                                                                                                                                 |
 | lc_otp_program           | otp_ctrl_pkg::lc_otp_program     | req_rsp | req   |       1 |                                                                                                                                                                                                                                                                                 |
@@ -153,7 +153,7 @@ See also [power manager documentation](../../../top_earlgrey/ip_autogen/pwrmgr/R
 
 #### OTP Interfaces
 
-All interfaces to and from OTP are explained in detail in the OTP Specification Document (for example, see [earlgrey's OTP specification](../../../top_earlgrey/ip_autogen/otp_ctrl/README.md#life-cycle-interfaces)).
+All interfaces to and from OTP are explained in detail in the [OTP Specification Document](../../otp_ctrl/README.md#life-cycle-interfaces).
 
 #### KMAC Interface
 

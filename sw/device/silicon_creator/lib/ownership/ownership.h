@@ -12,29 +12,43 @@
 #include "sw/device/silicon_creator/lib/ownership/owner_block.h"
 
 /**
+ * The signature or sealing status of an owner page.
+ */
+typedef enum owner_page_status {
+  /** Invalid: `INV_`. */
+  kOwnerPageStatusInvalid = 0x5f564e49,
+  /** Sealed: `SEAL`. */
+  kOwnerPageStatusSealed = 0x4c414553,
+  /** Signed: `SIGN`. */
+  kOwnerPageStatusSigned = 0x4e474953,
+} owner_page_status_t;
+
+/**
+ * RAM copies of the owner pages read out of flash INFO pages.
+ */
+extern owner_block_t owner_page[2];
+extern owner_page_status_t owner_page_valid[2];
+
+/**
  * Initialize the owner pages from flash
  */
 rom_error_t ownership_init(boot_data_t *bootdata, owner_config_t *config,
                            owner_application_keyring_t *keyring);
 
 /**
- * Lockdown the flash configuration.
+ * Check if owner page 1 is valid for ownership transfer.
  *
  * @param bootdata The current bootdata.
- * @param active_slot The active slot.
- * @param config The current owner configuration.
- * @return error state.
+ * @return kHardenedBoolTrue if page 1 is valid.
  */
-rom_error_t ownership_flash_lockdown(boot_data_t *bootdata,
-                                     uint32_t active_slot,
-                                     const owner_config_t *config);
+hardened_bool_t ownership_page1_valid_for_transfer(boot_data_t *bootdata);
 
 /**
- * Lockdown the ownership info pages.
+ * Seal an owner page.
  *
- * @param bootdata The current bootdata.
- * @param rescue Whether the ROM_EXT is in rescue mode.
+ * Calculates and applies the seal to an owner page in RAM.
+ *
+ * @param page Which owner page to seal.
  */
-void ownership_pages_lockdown(boot_data_t *bootdata, hardened_bool_t rescue);
-
+void ownership_page_seal(size_t page);
 #endif  // OPENTITAN_SW_DEVICE_SILICON_CREATOR_LIB_OWNERSHIP_OWNERSHIP_H_

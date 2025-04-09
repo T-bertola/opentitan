@@ -8,6 +8,7 @@ package spi_host_reg_pkg;
 
   // Param list
   parameter logic ByteOrder = 1;
+  parameter int NumCS = 1;
   parameter int TxDepth = 72;
   parameter int RxDepth = 64;
   parameter int CmdDepth = 4;
@@ -15,9 +16,6 @@ package spi_host_reg_pkg;
 
   // Address widths within the block
   parameter int BlockAw = 6;
-
-  // Number of registers for every interface
-  parameter int NumRegs = 12;
 
   ////////////////////////////
   // Typedefs for registers //

@@ -412,7 +412,7 @@
               desc: "One byte per transaction."
             }
             { value: "1",
-              name: "TWO_BYTE",
+              name: TWO_BYTE",
               desc: "Two bytes per transaction."
             }
             { value: "2",
@@ -468,15 +468,6 @@
                   Number of bytes specified in size register.
                   Note assumption is the peripheral lowers input once FIFO is cleared.
                 No explicit clearing necessary.
-                '''
-        }
-        { bits: "5"
-          name: "digest_swap"
-          resval: 0x0
-          desc: '''Digest register byte swap.
-
-                If 1 the value in each digest output register is converted to big-endian byte order.
-                This setting does not affect the order of the digest output registers, !!SHA2_DIGEST_0 still contains the first 4 bytes of the digest.
                 '''
         }
         { bits: "8"

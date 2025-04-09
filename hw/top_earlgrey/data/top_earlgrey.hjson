@@ -151,55 +151,33 @@
     // likely external or generated from a voltage comparator
     //
     nodes: [
-      { name: "por_aon",        gen: false, type: "top",                    clock: "aon"     },
-      { name: "lc_src",         gen: false, type: "int",                    clock: "io_div4" },
-      { name: "sys_src",        gen: false, type: "int",                    clock: "io_div4" },
-      { name: "por",            gen: true,  type: "top", parent: "por_aon", clock: "main"    },
-      { name: "por_io",         gen: true,  type: "top", parent: "por_aon", clock: "io"      },
-      { name: "por_io_div2",    gen: true , type: "top", parent: "por_aon", clock: "io_div2" },
-      { name: "por_io_div4",    gen: true , type: "top", parent: "por_aon", clock: "io_div4" },
-      { name: "por_usb",        gen: true , type: "top", parent: "por_aon", clock: "usb" },
-      { name: "lc",             gen: true,  type: "top", parent: "lc_src",  clock: "main"    },
-      { name: "lc_aon",         gen: true,  type: "top", parent: "lc_src",  clock: "aon"     },
-      { name: "lc_io",          gen: true,  type: "top", parent: "lc_src",  clock: "io"      },
-      { name: "lc_io_div2",     gen: true,  type: "top", parent: "lc_src",  clock: "io_div2" },
-      { name: "lc_io_div4",     gen: true,  type: "top", parent: "lc_src",  clock: "io_div4" },
-      { name: "lc_usb",         gen: true,  type: "top", parent: "lc_src",  clock: "usb"     },
-      { name: "sys",            gen: true,  type: "top", parent: "sys_src", clock: "main"    },
-      { name: "sys_io_div4",    gen: true,  type: "top", parent: "sys_src", clock: "io_div4" },
-      { name: "spi_device",     gen: true,  type: "top", parent: "lc_src", clock: "io_div4", sw: true },
-      { name: "spi_host0",      gen: true,  type: "top", parent: "lc_src", clock: "io",      sw: true },
-      { name: "spi_host1",      gen: true,  type: "top", parent: "lc_src", clock: "io_div2", sw: true },
-      { name: "usb",            gen: true,  type: "top", parent: "lc_src", clock: "usb",     sw: true },
-      { name: "usb_aon",        gen: true,  type: "top", parent: "lc_src", clock: "aon",     sw: true },
-      { name: "i2c0",           gen: true,  type: "top", parent: "lc_src", clock: "io_div4", sw: true },
-      { name: "i2c1",           gen: true,  type: "top", parent: "lc_src", clock: "io_div4", sw: true },
-      { name: "i2c2",           gen: true,  type: "top", parent: "lc_src", clock: "io_div4", sw: true },
+      { name: "por_aon",        gen: false, type: "top",                    clk: "aon"     },
+      { name: "lc_src",         gen: false, type: "int",                    clk: "io_div4" },
+      { name: "sys_src",        gen: false, type: "int",                    clk: "io_div4" },
+      { name: "por",            gen: true,  type: "top", parent: "por_aon", clk: "main"    },
+      { name: "por_io",         gen: true,  type: "top", parent: "por_aon", clk: "io"      },
+      { name: "por_io_div2",    gen: true , type: "top", parent: "por_aon", clk: "io_div2" },
+      { name: "por_io_div4",    gen: true , type: "top", parent: "por_aon", clk: "io_div4" },
+      { name: "por_usb",        gen: true , type: "top", parent: "por_aon", clk: "usb" },
+      { name: "lc",             gen: true,  type: "top", parent: "lc_src",  clk: "main"    },
+      { name: "lc_aon",         gen: true,  type: "top", parent: "lc_src",  clk: "aon"     },
+      { name: "lc_io",          gen: true,  type: "top", parent: "lc_src",  clk: "io"      },
+      { name: "lc_io_div2",     gen: true,  type: "top", parent: "lc_src",  clk: "io_div2" },
+      { name: "lc_io_div4",     gen: true,  type: "top", parent: "lc_src",  clk: "io_div4" },
+      { name: "lc_usb",         gen: true,  type: "top", parent: "lc_src",  clk: "usb"     },
+      { name: "sys",            gen: true,  type: "top", parent: "sys_src", clk: "main"    },
+      { name: "sys_io_div4",    gen: true,  type: "top", parent: "sys_src", clk: "io_div4" },
+      { name: "spi_device",     gen: true,  type: "top", parent: "lc_src", clk: "io_div4", sw: true },
+      { name: "spi_host0",      gen: true,  type: "top", parent: "lc_src", clk: "io",      sw: true },
+      { name: "spi_host1",      gen: true,  type: "top", parent: "lc_src", clk: "io_div2", sw: true },
+      { name: "usb",            gen: true,  type: "top", parent: "lc_src", clk: "usb",     sw: true },
+      { name: "usb_aon",        gen: true,  type: "top", parent: "lc_src", clk: "aon",     sw: true },
+      { name: "i2c0",           gen: true,  type: "top", parent: "lc_src", clk: "io_div4", sw: true },
+      { name: "i2c1",           gen: true,  type: "top", parent: "lc_src", clk: "io_div4", sw: true },
+      { name: "i2c2",           gen: true,  type: "top", parent: "lc_src", clk: "io_div4", sw: true },
     ]
   },
-  // The reset requests: peripherals are deduced, but internal and debug need
-  // to be configure in hjson file.
-  reset_requests: {
-    int: [
-      {
-        "name": "MainPwr",
-        "desc": "main power glitch reset request",
-        "module": "pwrmgr_aon"
-      },
-      {
-        "name": "Esc",
-        "desc": "escalation reset request",
-        "module": "alert_handler"
-      }
-    ],
-    debug: [
-      {
-        "name": "Ndm",
-        "desc": "non-debug-module reset request",
-        "module": "rv_dm"
-      }
-    ],
-  },
+
   // Number of cores: used in rv_plic and timer
   num_cores: "1",
 
@@ -349,7 +327,6 @@
     },
     { name: "gpio",
       type: "gpio",
-      template_type: "gpio",
       clock_srcs: {clk_i: "io_div4"},
       clock_group: "peri",
       reset_connections: {rst_ni: "lc_io_div4"},
@@ -359,8 +336,7 @@
       param_decl: {
         GpioAsHwStrapsEn: "0",
         GpioAsyncOn: "1"
-      },
-      attr: "ipgen"
+      }
     },
     { name: "spi_device",
       type: "spi_device",
@@ -418,7 +394,6 @@
     },
     { name: "otp_ctrl",
       type: "otp_ctrl",
-      template_type: "otp_ctrl",
       clock_srcs: {clk_i: "io_div4", clk_edn_i: "main"},
       clock_group: "secure",
       reset_connections: {rst_ni: "lc_io_div4", rst_edn_ni: "lc"},
@@ -426,7 +401,6 @@
         core: {hart: "0x40130000"},
         prim: {hart: "0x40138000"},
       }
-      attr: "ipgen"
     },
     { name: "lc_ctrl",
       type: "lc_ctrl",
@@ -448,22 +422,15 @@
         ProductId: "16'h 0002", // Earlgrey PROD
         RevisionId: "8'h 01",   // First tapeout
         IdcodeValue: "jtag_id_pkg::LC_CTRL_JTAG_IDCODE",
-        EscNumSeverities: "AlertHandlerEscNumSeverities",
-        EscPingCountWidth: "AlertHandlerEscPingCountWidth",
       },
     },
     { name: "alert_handler",
       type: "alert_handler",
-      template_type: "alert_handler",
       clock_srcs: {clk_i: "io_div4", clk_edn_i: "main"},
       clock_group: "secure",
       reset_connections: {rst_ni: "lc_io_div4", rst_edn_ni: "lc"},
       base_addr: {
         hart: "0x40150000",
-      },
-      param_decl: {
-        EscNumSeverities: "4",
-        EscPingCountWidth: "16"
       },
       attr: "ipgen",
     },
@@ -499,7 +466,6 @@
     },
     { name: "pwrmgr_aon",
       type: "pwrmgr",
-      template_type: "pwrmgr",
       clock_group: "powerup",
       clock_srcs: {
         clk_i: "io_div4",
@@ -536,15 +502,10 @@
       base_addr: {
         hart: "0x40400000",
       },
-      param_decl: {
-        EscNumSeverities: "AlertHandlerEscNumSeverities",
-        EscPingCountWidth: "AlertHandlerEscPingCountWidth",
-      },
       attr: "ipgen",
     },
     { name: "rstmgr_aon",
       type: "rstmgr",
-      template_type: "rstmgr",
       clock_srcs: {
         clk_i: {
           clock: "io_div4",
@@ -572,7 +533,6 @@
     },
     { name: "clkmgr_aon",
       type: "clkmgr",
-      template_type: "clkmgr",
       clock_srcs: {
         clk_i: "io_div4",
         clk_main_i: {
@@ -635,7 +595,6 @@
     },
     { name: "pwm_aon",
       type: "pwm",
-      template_type: "pwm",
       clock_srcs: {clk_i: "io_div4", clk_core_i: "aon"},
       clock_group: "peri",
       reset_connections: {rst_ni: "lc_io_div4", rst_core_ni: "lc_aon"},
@@ -643,11 +602,9 @@
       base_addr: {
         hart: "0x40450000",
       },
-      attr: "ipgen",
     },
     { name: "pinmux_aon",
       type: "pinmux",
-      template_type: "pinmux",
       clock_srcs: {clk_i: "io_div4", clk_aon_i: "aon"},
       clock_group: "powerup",
       reset_connections: {rst_ni: "lc_io_div4",
@@ -777,7 +734,6 @@
     },
     { name: "flash_ctrl",
       type: "flash_ctrl",
-      template_type: "flash_ctrl",
       clock_srcs: {clk_i: "main", clk_otp_i: "io_div4"},
       clock_group: "infra",
       reset_connections: {rst_ni: "lc", rst_otp_ni: "lc_io_div4"},
@@ -824,7 +780,6 @@
     },
     { name: "rv_plic",
       type: "rv_plic",
-      template_type: "rv_plic",
       clock_srcs: {clk_i: "main"},
       clock_group: "secure",
       reset_connections: {rst_ni: "lc"},
@@ -987,11 +942,6 @@
     },
     { name: "rv_core_ibex",
       type: "rv_core_ibex",
-      template_type: "rv_core_ibex",
-      attr: "ipgen",
-      ipgen_param: {
-        NumRegions: 2
-      }
       param_decl: {PMPEnable: "1",
                    PMPGranularity: "0",
                    PMPNumRegions: "16",
@@ -1018,8 +968,8 @@
                    DmHaltAddr: "tl_main_pkg::ADDR_SPACE_RV_DM__MEM + dm::HaltAddress[31:0]",
                    DmExceptionAddr: "tl_main_pkg::ADDR_SPACE_RV_DM__MEM + dm::ExceptionAddress[31:0]",
                    PipeLine: "0",
-                   NEscalationSeverities: "AlertHandlerEscNumSeverities",
-                   WidthPingCounter: "AlertHandlerEscPingCountWidth",
+                   NEscalationSeverities: "alert_handler_reg_pkg::N_ESC_SEV",
+                   WidthPingCounter: "alert_handler_reg_pkg::PING_CNT_DW"
                   },
       clock_srcs: {
         clk_i: "main",

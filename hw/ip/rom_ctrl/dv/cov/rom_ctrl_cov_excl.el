@@ -39,16 +39,6 @@ Block 1 "3318159292" "data_o = 39'(data_i);"
 INSTANCE: tb.dut.u_tl_adapter_rom.u_tlul_data_integ_enc_instr.u_data_gen
 Block 1 "3318159292" "data_o = 39'(data_i);"
 
-INSTANCE: tb.dut.gen_rom_scramble_enabled.u_rom.u_rom.u_prim_rom.gen_generic.u_impl_generic
-ANNOTATION: "cfg_i is tied to rom_cfg_i in rom_ctrl.sv. This is opaque to DV code and may be constant (so the continuous assignment will never execute)."
-Block 1 "118728425" "assign unused_cfg = (^cfg_i);"
-
-INSTANCE: tb.dut.gen_rom_scramble_enabled.u_rom.u_seed_anchor.u_secure_anchor_buf.gen_generic.u_impl_generic
-ANNOTATION: "u_seed_anchor inputs are tied to parameters. Therefore this continuous assignment
-             cannot see execution"
-Block 1 "2421449832" "assign inv = (~in_i);"
-Block 2 "1991008127" "assign out_o = (~inv);"
-
 INSTANCE: tb.dut.u_tl_adapter_rom
 // wr_attr_error and wr_vld_error both depend on a_opcode != Get. wr_attr_error can exist without
 //wr_vld_error but ErrOnWrite is wired to 1 inside the instantiation of tlul_adapter_sram in
@@ -98,6 +88,15 @@ Condition 21 "3623514242" "(d_valid & rspfifo_rvalid & (reqfifo_rdata.op == OpRe
 // popped again before anything appears in the response fifo.
 Condition 24 "1059982851" "(vld_rd_rsp & ((~d_error))) 1 -1" (2 "10")
 
+// The reason for condition 24 explains why we can't get (vld_rd_rsp && reqfifo_rdata.error) = 1 as
+// if vld_rd_rsp = 1, this means that rspfifo_rvalid = 1. But when we have reqfifo_rdata.error, the
+// request from the req_fifo gets popped again before becoming visible to response fifo. This also
+// explains why we can't expect 1 and 11 for condition 25 and 26 respectively.
+Condition 25 "2807788926" "((vld_rd_rsp && reqfifo_rdata.error) ? error_blanking_integ :
+                            (vld_rd_rsp ? rspfifo_rdata.data_intg :
+                            prim_secded_pkg::SecdedInv3932ZeroEcc)) 1 -1" (2 "1")
+Condition 26 "561780173" "(vld_rd_rsp && reqfifo_rdata.error) 1 -1" (3 "11")
+
 // We cannot see d_valid = 0 and d_error = 1. For d_error to be true, we need reqfifo_rvalid to be
 // true. But then the only way for d_valid to be false is if rspfifo_rvalid is false (and
 // reqfifo_rdata.op is OpRead).
@@ -106,7 +105,7 @@ Condition 24 "1059982851" "(vld_rd_rsp & ((~d_error))) 1 -1" (2 "10")
 // result, after a request is be pushed into u_reqfifo, it is always popped again on the next cycle.
 // As a result, if reqfifo_rvalid is true then rspfifo_wvalid will also be true and (because
 // u_rspfifo is in pass-through mode) rspfifo_rvalid will be true.
-Condition 33 "2509708677" "(d_valid && d_error) 1 -1" (1 "01")
+Condition 34 "201396280" "(d_valid && d_error) 1 -1" (1 "01")
 
 // It is impossible to see rvalid_i && !reqfifo_rvalid. If rvalid_i is true, the ROM is responding
 // to a request that was sent on the previous cycle. Since it always responds in exactly one cycle,
@@ -128,7 +127,7 @@ Condition 43 "721931741" "(rvalid_i & reqfifo_rvalid) 1 -1" (2 "10")
 // when a_valid appears as false to u_err will automatically raise err_o. Then err_o leads to
 // error_internal. Thus, we can't expect !tl_i_int.a_valid & !error_internal and for the reasons
 // above, the conditional statement is unable to cover case 011.
-Condition 36 "413025503" "(tl_i_int.a_valid & reqfifo_wready & ((~error_internal))) 1 -1" (1 "011")
+Condition 37 "2164803938" "(tl_i_int.a_valid & reqfifo_wready & ((~error_internal))) 1 -1" (1 "011")
 
 // It is impossible to get sram_ack & we_o. we_o becomes true when there is an a_valid and a_opcode
 // as Put. But when a_opcode is a Put, wr_vld_error in the adapter becomes true as ErrOnWrite is
@@ -136,101 +135,3 @@ Condition 36 "413025503" "(tl_i_int.a_valid & reqfifo_wready & ((~error_internal
 // rom_ctrl doesn't enable integrity errors, error_det comes out as error_internal directly from
 // u_sram_byte. But this makes req_o false and hence sram_ack false.
 Condition 43 "2041272341" "(sram_ack & ((~we_o))) 1 -1" (2 "10")
-
-// It is impossible to get !sramreqfifo_wready. The depth of sramreqfifo is 2. sramreqfifo_wready
-// can be false if the fifo is full. But this can't happen as we don't fill the fifo without
-// removing the last item that was pushed in the fifo.
-CHECKSUM: "2313518930 2439451700"
-INSTANCE: tb.dut.u_tl_adapter_rom
-Condition 34 "1999653721" "((gnt_i | missed_err_gnt_q) & reqfifo_wready & sramreqfifo_wready)
-                            1 -1" (3 "110")
-
-// The case !empty when under_rst=1 is impossible as fifo clears on reset.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_rspfifo
-Condition 7 "1709501387" "(((~gen_normal_fifo.empty)) & ((~gen_normal_fifo.under_rst)))
-                           1 -1" (2 "10")
-
-// The condition !rvalid_o & rready_i is non-occuring. rready_i is reqfifo_rready in
-// u_tl_adapter_rom. reqfifo_rready is driven by d_ack, which is only true if tl_o_int.d_valid is
-// true. Which means that ROM is responding to a request which should be in u_reqfifo as soon as it
-// was out. This implies that u_reqfifo is not empty and both rvaid_o and rready_i must be true.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_reqfifo
-Condition 3 "1324655787" "(rvalid_o & rready_i & ((~gen_normal_fifo.under_rst))) 1 -1" (1 "011")
-
-// If rready_i is true, it means that it is true in u_tl_adapter_rom as rspfifo_rready. If
-// rspfifo_rready is true, this means that reqfifo_rdata.op = OpRead, reqfifo_rdata.error is false
-// and reqfifo_rready is true. The latter signal is driven by d_ack, which can only be true if
-// tl_o_int.d_valid is true. Since we want reqfifo_rdata.op = OpRead and reqfifo_rdata.error as
-// false, the logic that drive d_valid yields rspfifo_rvalid=1. That signal is rvalid_o in
-// u_rspfifo. As a result, if rready_i is true then, rvalid_o must be true.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_rspfifo
-Condition 3 "1324655787" "(rvalid_o & rready_i & ((~gen_normal_fifo.under_rst))) 1 -1" (1 "011")
-
-// If rready_i is true, it means that it is true in u_tl_adapter_rom as sramreqfifo_rready. That
-// signal is driven by rspfifo_wvalid. If rspfifo_wvalid can be true when both rvalid_i and
-// reqfifo_rvalid is true. This means that the ROM is responding to a request and it is available
-// in u_reqfifo. ROM always responds in one cycle which means that u_sramreqfifo must contain that
-// request. This implies that u_sramreqfifo is not empty and rvalid_o must be true. As a result, if
-// rready_i is true, then rvalid_o must be true.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_sramreqfifo
-Condition 3 "1324655787" "(rvalid_o & rready_i & ((~gen_normal_fifo.under_rst))) 1 -1" (1 "011")
-
-// We can't get rvalid_o and rready_i as true when fifo is under reset. Since Pass is false in case
-// of u_reqfifo, rvalid_o can only be true if the fifo is not empty. But when rst_ni is low, the
-// fifo clears its contents. Therefore it cannot be true in the first cycle after reset as that is
-// the last cycle for under_rst to hold itself true.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_reqfifo
-Condition 3 "1324655787" "(rvalid_o & rready_i & ((~gen_normal_fifo.under_rst))) 1 -1" (3 "110")
-
-// By the same argument as that given for the previous condition, the u_rspfifo storage cannot be
-// nonempty when the under_rst flag is true. But u_rspfifo was has a Pass parameter of 1, which
-// would give another way for rvalid_o to be true. For that to apply, we would need wvalid_i to be
-// true, which is rspfifo_wvalid in tlul_adapter_sram. This depends on reqfifo_rvalid, which can
-// only be true when u_reqfifo is nonempty. The reasoning for the previous condition shows that this
-// cannot happen.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_rspfifo
-Condition 3 "1324655787" "(rvalid_o & rready_i & ((~gen_normal_fifo.under_rst))) 1 -1" (3 "110")
-
-// Since Pass is false for u_sramreqfifo, the same reasoning for the analogous condition for
-// u_reqfifo applies here as well.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_sramreqfifo
-Condition 3 "1324655787" "(rvalid_o & rready_i & ((~gen_normal_fifo.under_rst))) 1 -1" (3 "110")
-
-// wvalid_i gets driven in u_tl_adapter_rom as reqfifo_wvalid by a_ack. a_ack requires
-// tl_o_int.a_ready as true to set itself true. But that signal requires wready_o=1, which is
-// reqfifo_wready in u_tl_adapter_rom. So, we can't get wvalid_i without wready_o.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_reqfifo
-Condition 2 "803322985" "(wvalid_i & wready_o) 1 -1" (2 "10")
-
-// The u_rspfifo instance in tlul_adapter_sram can never give any backpressure through the wready_o
-// signal. This is because u_reqfifo will always be at least as full as u_rspfifo, each item in
-// u_rspfifo is a response to a request that is still stored in u_reqfifo. The request is stored in
-// order to be able to supply d_size and d_source in the TL response.
-//
-// If w_valid_i is true in u_rspfifo, this is the response to some request which must be stored in
-// u_reqfifo, which implies there is a slot to store it.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_rspfifo
-Condition 2 "803322985" "(wvalid_i & wready_o) 1 -1" (2 "10")
-
-// For u_sramreqfifo, we can only get wready_o=0 when under_rst=1 or the SRAM fifo is full. But we
-// can't get the sramreqfifo full as the SRAM req goes out to rom and rom responds in one cycle.
-// So, we can't queue the request into the u_sramreqfifo.
-INSTANCE: tb.dut.u_tl_adapter_rom.u_sramreqfifo
-Condition 2 "803322985" "(wvalid_i & wready_o) 1 -1" (2 "10")
-
-INSTANCE: tb.dut
-// rom_cfg_i is tied to 0 inside the instantiation of rom_ctrl.
-Toggle 0to1 rom_cfg_i.cfg [3:0] "logic rom_cfg_i.cfg[3:0]"
-Toggle 1to0 rom_cfg_i.cfg [3:0] "logic rom_cfg_i.cfg[3:0]"
-Toggle 0to1 rom_cfg_i.cfg_en "logic rom_cfg_i.cfg_en"
-Toggle 1to0 rom_cfg_i.cfg_en "logic rom_cfg_i.cfg_en"
-Toggle 0to1 rom_cfg_i.test "logic rom_cfg_i.test"
-Toggle 1to0 rom_cfg_i.test "logic rom_cfg_i.test"
-
-// The bits [63:39] of kmac_data_o.data are zero-expanded in rom_ctrl.sv
-Toggle 0to1 kmac_data_o.data [63:39] "logic kmac_data_o.data[63:0]"
-Toggle 1to0 kmac_data_o.data [63:39] "logic kmac_data_o.data[63:0]"
-
-// kmac_data_o.strb is assigned to 1's in rom_ctrl.sv
-Toggle 0to1 kmac_data_o.strb "logic kmac_data_o.strb[7:0]"
-Toggle 1to0 kmac_data_o.strb "logic kmac_data_o.strb[7:0]"

@@ -10,6 +10,7 @@
 #include "sw/device/lib/base/memory.h"
 #include "sw/device/lib/base/stdasm.h"
 #include "sw/device/lib/runtime/hart.h"
+#include "sw/device/silicon_creator/imm_rom_ext/imm_rom_ext.h"
 #include "sw/device/silicon_creator/lib/base/boot_measurements.h"
 #include "sw/device/silicon_creator/lib/base/chip.h"
 #include "sw/device/silicon_creator/lib/base/sec_mmio.h"
@@ -37,7 +38,6 @@
 #include "sw/device/silicon_creator/lib/manifest_def.h"
 #include "sw/device/silicon_creator/lib/ownership/ownership.h"
 #include "sw/device/silicon_creator/lib/ownership/ownership_activate.h"
-#include "sw/device/silicon_creator/lib/ownership/ownership_key.h"
 #include "sw/device/silicon_creator/lib/ownership/ownership_unlock.h"
 #include "sw/device/silicon_creator/lib/shutdown.h"
 #include "sw/device/silicon_creator/lib/sigverify/ecdsa_p256_key.h"
@@ -59,7 +59,7 @@ extern char _rom_ext_start_address[];
 extern const char _rom_chip_info_start[];
 
 // Life cycle state of the chip.
-lifecycle_state_t lc_state;
+lifecycle_state_t lc_state = kLcStateProd;
 
 // Owner configuration details parsed from the onwer info pages.
 owner_config_t owner_config;
@@ -67,8 +67,26 @@ owner_config_t owner_config;
 // Owner application keys.
 owner_application_keyring_t keyring;
 
-// Verifying key index
-size_t verify_key;
+// ePMP regions for important address spaces.
+const epmp_region_t kRamRegion = {
+    .start = TOP_EARLGREY_RAM_MAIN_BASE_ADDR,
+    .end = TOP_EARLGREY_RAM_MAIN_BASE_ADDR + TOP_EARLGREY_RAM_MAIN_SIZE_BYTES,
+};
+
+const epmp_region_t kMmioRegion = {
+    .start = TOP_EARLGREY_MMIO_BASE_ADDR,
+    .end = TOP_EARLGREY_MMIO_BASE_ADDR + TOP_EARLGREY_MMIO_SIZE_BYTES,
+};
+
+const epmp_region_t kRvDmRegion = {
+    .start = TOP_EARLGREY_RV_DM_MEM_BASE_ADDR,
+    .end = TOP_EARLGREY_RV_DM_MEM_BASE_ADDR + TOP_EARLGREY_RV_DM_MEM_SIZE_BYTES,
+};
+
+const epmp_region_t kFlashRegion = {
+    .start = TOP_EARLGREY_EFLASH_BASE_ADDR,
+    .end = TOP_EARLGREY_EFLASH_BASE_ADDR + TOP_EARLGREY_EFLASH_SIZE_BYTES,
+};
 
 OT_WARN_UNUSED_RESULT
 static rom_error_t rom_ext_irq_error(void) {
@@ -140,11 +158,7 @@ static rom_error_t rom_ext_init(boot_data_t *boot_data) {
   // Configure UART0 as stdout.
   uart_init(kUartNCOValue);
 
-  // Reclaim entries 0 ~ 7 from ROM and ROM_EXT IMM_SECTION.
-  for (int8_t i = 7; i >= 0; --i) {
-    epmp_clear((uint8_t)i);
-  }
-  HARDENED_RETURN_IF_ERROR(epmp_state_check());
+  // TODO: Verify ePMP expectations from ROM.
 
   // Conditionally patch AST and check that it is in the expected state.
   HARDENED_RETURN_IF_ERROR(ast_patch(lc_state));
@@ -196,15 +210,13 @@ OT_WARN_UNUSED_RESULT
 static rom_error_t rom_ext_verify(const manifest_t *manifest,
                                   const boot_data_t *boot_data) {
   RETURN_IF_ERROR(rom_ext_boot_policy_manifest_check(manifest, boot_data));
-  ownership_key_alg_t key_alg = kOwnershipKeyAlgEcdsaP256;
+  size_t kindex = 0;
   RETURN_IF_ERROR(owner_keyring_find_key(
-      &keyring, key_alg,
-      sigverify_ecdsa_p256_key_id_get(&manifest->ecdsa_public_key),
-      &verify_key));
+      &keyring, kOwnershipKeyAlgRsa,
+      sigverify_rsa_key_id_get(&manifest->rsa_modulus), &kindex));
 
-  dbg_printf("app_verify: key=%u alg=%C domain=%C\r\n", verify_key,
-             keyring.key[verify_key]->key_alg,
-             keyring.key[verify_key]->key_domain);
+  dbg_printf("app_verify: key=%u alg=%C domain=%C\r\n", kindex,
+             keyring.key[kindex]->key_alg, keyring.key[kindex]->key_domain);
 
   memset(boot_measurements.bl0.data, (int)rnd_uint32(),
          sizeof(boot_measurements.bl0.data));
@@ -212,8 +224,9 @@ static rom_error_t rom_ext_verify(const manifest_t *manifest,
   hmac_sha256_init();
   // Hash usage constraints.
   manifest_usage_constraints_t usage_constraints_from_hw;
-  sigverify_usage_constraints_get(manifest->usage_constraints.selector_bits |
-                                      keyring.key[verify_key]->usage_constraint,
+  // TODO(cfrantz): Combine key's usage constraints with manifest's
+  // usage_constraints.
+  sigverify_usage_constraints_get(manifest->usage_constraints.selector_bits,
                                   &usage_constraints_from_hw);
   hmac_sha256_update(&usage_constraints_from_hw,
                      sizeof(usage_constraints_from_hw));
@@ -231,9 +244,9 @@ static rom_error_t rom_ext_verify(const manifest_t *manifest,
   memcpy(&boot_measurements.bl0, &act_digest, sizeof(boot_measurements.bl0));
 
   uint32_t flash_exec = 0;
-  return sigverify_ecdsa_p256_verify(&manifest->ecdsa_signature,
-                                     &keyring.key[verify_key]->data.ecdsa,
-                                     &act_digest, &flash_exec);
+  return sigverify_rsa_verify(&manifest->rsa_signature,
+                              &keyring.key[kindex]->data.rsa, &act_digest,
+                              lc_state, &flash_exec);
 }
 
 /**
@@ -258,40 +271,18 @@ static uintptr_t owner_vma_get(const manifest_t *manifest, uintptr_t lma_addr) {
 }
 
 OT_WARN_UNUSED_RESULT
-static rom_error_t rom_ext_boot(boot_data_t *boot_data, boot_log_t *boot_log,
-                                const manifest_t *manifest) {
-  // Determine which owner block the key came from and measure that block.
-  hmac_digest_t owner_measurement;
-  const owner_application_key_t *key = keyring.key[verify_key];
-  owner_block_measurement(owner_block_key_page(key), &owner_measurement);
-
-  keymgr_binding_value_t sealing_binding;
-  if (boot_data->ownership_state == kOwnershipStateLockedOwner) {
-    HARDENED_CHECK_EQ(boot_data->ownership_state, kOwnershipStateLockedOwner);
-    // If we're in LockedOwner, initialize the sealing binding with the
-    // diversification constant associated with key applicaiton key that
-    // validated the owner firmware payload.
-    static_assert(
-        sizeof(key->raw_diversifier) == sizeof(keymgr_binding_value_t),
-        "Expect the keymgr binding value to be the same size as an application "
-        "key diversifier");
-    memcpy(&sealing_binding, key->raw_diversifier, sizeof(sealing_binding));
-  } else {
-    // If we're not in LockedOwner state, we don't want to derive any valid
-    // sealing keys, so set the binding constant to a nonsense value.
-    memset(&sealing_binding, 0x55, sizeof(sealing_binding));
-  }
-
+static rom_error_t rom_ext_boot(const manifest_t *manifest) {
   // Generate CDI_1 attestation keys and certificate.
-  HARDENED_RETURN_IF_ERROR(dice_chain_attestation_owner(
-      manifest, &boot_measurements.bl0, &owner_measurement, &sealing_binding,
-      key->key_domain));
+  HARDENED_RETURN_IF_ERROR(
+      dice_chain_attestation_owner(&boot_measurements.bl0, manifest));
 
   // Write the DICE certs to flash if they have been updated.
   HARDENED_RETURN_IF_ERROR(dice_chain_flush_flash());
 
   // Remove write and erase access to the certificate pages before handing over
   // execution to the owner firmware (owner firmware can still read).
+  flash_ctrl_cert_info_page_owner_restrict(
+      &kFlashCtrlInfoPageAttestationKeySeeds);
   flash_ctrl_cert_info_page_owner_restrict(&kFlashCtrlInfoPageDiceCerts);
 
   // Disable access to silicon creator info pages, the OTP creator partition
@@ -301,8 +292,55 @@ static rom_error_t rom_ext_boot(boot_data_t *boot_data, boot_log_t *boot_log,
   SEC_MMIO_WRITE_INCREMENT(kFlashCtrlSecMmioCreatorInfoPagesLockdown +
                            kOtpSecMmioCreatorSwCfgLockDown);
 
-  epmp_clear_lock_bits();
+  // ePMP region 15 gives read/write access to RAM.
+  epmp_set_napot(15, kRamRegion, kEpmpPermReadWrite);
 
+  // Reconfigure the ePMP MMIO region to be NAPOT region 14, thus freeing
+  // up an ePMP entry for use elsewhere.
+  epmp_set_napot(14, kMmioRegion, kEpmpPermReadWrite);
+
+  // ePMP region 13 allows RvDM access.
+  if (lc_state == kLcStateProd || lc_state == kLcStateProdEnd) {
+    // No RvDM access in Prod states, so we can clear the entry.
+    epmp_clear(13);
+  } else {
+    epmp_set_napot(13, kRvDmRegion, kEpmpPermReadWriteExecute);
+  }
+
+  // ePMP region 12 gives read access to all of flash for both M and U modes.
+  // The flash access was in ePMP region 5.  Clear it so it doesn't take
+  // priority over 12.
+  epmp_set_napot(12, kFlashRegion, kEpmpPermReadOnly);
+  epmp_clear(5);
+
+  // Move the ROM_EXT TOR region from entries 3/4/6 to 9/10/11.
+  // If the ROM_EXT is located in the virtual window, the ROM will have
+  // configured ePMP entry 6 as the read-only region over the entire
+  // window.
+  //
+  // If not using the virtual window, we move the ROM_EXT TOR region to
+  // ePMP entries 10/11.
+  // If using the virtual window, we move the ROM_EXT read-only region to
+  // ePMP entry 11 and move the TOR region to 9/10.
+  uint32_t start, end, vwindow;
+  CSR_READ(CSR_REG_PMPADDR3, &start);
+  CSR_READ(CSR_REG_PMPADDR4, &end);
+  CSR_READ(CSR_REG_PMPADDR6, &vwindow);
+  uint8_t rxindex = 10;
+  if (vwindow) {
+    rxindex = 9;
+    uint32_t size = 1 << bitfield_count_trailing_zeroes32(~vwindow);
+    vwindow = (vwindow & ~(size - 1)) << 2;
+    size <<= 3;
+
+    epmp_set_napot(11, (epmp_region_t){.start = vwindow, .end = vwindow + size},
+                   kEpmpPermReadOnly);
+  }
+  epmp_set_tor(rxindex, (epmp_region_t){.start = start << 2, .end = end << 2},
+               kEpmpPermReadExecute);
+  for (int8_t i = (int8_t)rxindex - 1; i >= 0; --i) {
+    epmp_clear((uint8_t)i);
+  }
   HARDENED_RETURN_IF_ERROR(epmp_state_check());
 
   // Configure address translation, compute the epmp regions and the entry
@@ -365,10 +403,6 @@ static rom_error_t rom_ext_boot(boot_data_t *boot_data, boot_log_t *boot_log,
   ibex_addr_remap_lockdown(0);
   ibex_addr_remap_lockdown(1);
 
-  // Lock the flash according to the ownership configuration.
-  HARDENED_RETURN_IF_ERROR(
-      ownership_flash_lockdown(boot_data, boot_log->bl0_slot, &owner_config));
-
   dbg_print_epmp();
 
   // Verify expectations before jumping to owner code.
@@ -386,8 +420,7 @@ static rom_error_t rom_ext_boot(boot_data_t *boot_data, boot_log_t *boot_log,
 
 OT_WARN_UNUSED_RESULT
 static rom_error_t boot_svc_next_boot_bl0_slot_handler(
-    boot_svc_msg_t *boot_svc_msg, boot_data_t *boot_data,
-    boot_log_t *boot_log) {
+    boot_svc_msg_t *boot_svc_msg, boot_data_t *boot_data) {
   uint32_t active_slot = boot_data->primary_bl0_slot;
   uint32_t primary_slot = boot_svc_msg->next_boot_bl0_slot_req.primary_bl0_slot;
   rom_error_t error = kErrorOk;
@@ -404,8 +437,6 @@ static rom_error_t boot_svc_next_boot_bl0_slot_handler(
         // Read the boot data back to ensure the correct slot is booted this
         // time.
         HARDENED_RETURN_IF_ERROR(boot_data_read(lc_state, boot_data));
-        // Update the boot log.
-        boot_log->primary_bl0_slot = boot_data->primary_bl0_slot;
         break;
       case kBootSlotUnspecified:
         // Do nothing.
@@ -492,8 +523,7 @@ static rom_error_t boot_svc_min_sec_ver_handler(boot_svc_msg_t *boot_svc_msg,
 }
 
 OT_WARN_UNUSED_RESULT
-static rom_error_t handle_boot_svc(boot_data_t *boot_data,
-                                   boot_log_t *boot_log) {
+static rom_error_t handle_boot_svc(boot_data_t *boot_data) {
   boot_svc_msg_t *boot_svc_msg = &retention_sram_get()->creator.boot_svc_msg;
   // TODO(lowRISC#22387): Examine the boot_svc code paths for boot loops.
   if (boot_svc_msg->header.identifier == kBootSvcIdentifier) {
@@ -506,8 +536,7 @@ static rom_error_t handle_boot_svc(boot_data_t *boot_data,
         break;
       case kBootSvcNextBl0SlotReqType:
         HARDENED_CHECK_EQ(msg_type, kBootSvcNextBl0SlotReqType);
-        return boot_svc_next_boot_bl0_slot_handler(boot_svc_msg, boot_data,
-                                                   boot_log);
+        return boot_svc_next_boot_bl0_slot_handler(boot_svc_msg, boot_data);
       case kBootSvcMinBl0SecVerReqType:
         HARDENED_CHECK_EQ(msg_type, kBootSvcMinBl0SecVerReqType);
         return boot_svc_min_sec_ver_handler(boot_svc_msg, boot_data);
@@ -556,7 +585,7 @@ static rom_error_t rom_ext_try_next_stage(boot_data_t *boot_data,
     boot_log_digest_update(boot_log);
 
     // Boot fails if a verified ROM_EXT cannot be booted.
-    RETURN_IF_ERROR(rom_ext_boot(boot_data, boot_log, manifests.ordered[i]));
+    RETURN_IF_ERROR(rom_ext_boot(manifests.ordered[i]));
     // `rom_ext_boot()` should never return `kErrorOk`, but if it does
     // we must shut down the chip instead of trying the next ROM_EXT.
     return kErrorRomExtBootFailed;
@@ -589,9 +618,11 @@ static rom_error_t rom_ext_start(boot_data_t *boot_data, boot_log_t *boot_log) {
   boot_log->rom_ext_major = self->version_major;
   boot_log->rom_ext_minor = self->version_minor;
   boot_log->rom_ext_size = CHIP_ROM_EXT_SIZE_MAX;
-  // Even though `primary_bl0_slot` can be changed by boot svc, we initialize
-  // it here so the "SetNextBl0" can do a one-time override of the RAM copy
-  // of `boot_data`.
+  boot_log->rom_ext_nonce = boot_data->nonce;
+  boot_log->ownership_state = boot_data->ownership_state;
+  boot_log->ownership_transfers = boot_data->ownership_transfers;
+  boot_log->rom_ext_min_sec_ver = boot_data->min_security_version_rom_ext;
+  boot_log->bl0_min_sec_ver = boot_data->min_security_version_bl0;
   boot_log->primary_bl0_slot = boot_data->primary_bl0_slot;
 
   // Initialize the chip ownership state.
@@ -600,12 +631,6 @@ static rom_error_t rom_ext_start(boot_data_t *boot_data, boot_log_t *boot_log) {
   if (error == kErrorWriteBootdataThenReboot) {
     return error;
   }
-  // TODO(cfrantz): evaluate permissible ownership init failure conditions
-  // and change this to HARDENED_RETURN_IF_ERROR.
-  if (error != kErrorOk) {
-    dbg_printf("ownership_init: %x\r\n", error);
-  }
-
   // Configure SRAM execution as the owner requested.
   rom_ext_sram_exec(owner_config.sram_exec);
 
@@ -613,7 +638,7 @@ static rom_error_t rom_ext_start(boot_data_t *boot_data, boot_log_t *boot_log) {
   uint32_t reset_reasons = retention_sram_get()->creator.reset_reasons;
   uint32_t skip_boot_svc = reset_reasons & (1 << kRstmgrReasonLowPowerExit);
   if (skip_boot_svc == 0) {
-    error = handle_boot_svc(boot_data, boot_log);
+    error = handle_boot_svc(boot_data);
     if (error == kErrorWriteBootdataThenReboot) {
       // Boot services reports errors by writing a status code into the reply
       // messages.  Regardless of whether a boot service request produced an
@@ -623,29 +648,29 @@ static rom_error_t rom_ext_start(boot_data_t *boot_data, boot_log_t *boot_log) {
     }
   }
 
-  // Synchronize the boot_log entries that could be changed by boot services.
+  // Re-sync the boot_log entries that could be changed by boot services.
   boot_log->rom_ext_nonce = boot_data->nonce;
   boot_log->ownership_state = boot_data->ownership_state;
-  boot_log->ownership_transfers = boot_data->ownership_transfers;
-  boot_log->rom_ext_min_sec_ver = boot_data->min_security_version_rom_ext;
-  boot_log->bl0_min_sec_ver = boot_data->min_security_version_bl0;
   boot_log_digest_update(boot_log);
 
   if (uart_break_detect(kRescueDetectTime) == kHardenedBoolTrue) {
     dbg_printf("rescue: remember to clear break\r\n");
     uart_enable_receiver();
-    ownership_pages_lockdown(boot_data, /*rescue=*/kHardenedBoolTrue);
     // TODO: update rescue protocol to accept boot data and rescue
     // config from the owner_config.
     error = rescue_protocol(boot_data, owner_config.rescue);
   } else {
-    ownership_pages_lockdown(boot_data, /*rescue=*/kHardenedBoolFalse);
     error = rom_ext_try_next_stage(boot_data, boot_log);
   }
   return error;
 }
 
 void rom_ext_main(void) {
+  // TODO(opentitan#24368): Call immutable main in .rom_ext_immutable.
+  // The immutable rom_ext startup code is not ready yet, so we call it here
+  // to avoid breaking tests.
+  imm_rom_ext_main();
+
   rom_ext_check_rom_expectations();
   boot_data_t boot_data;
   boot_log_t *boot_log = &retention_sram_get()->creator.boot_log;
@@ -658,16 +683,19 @@ void rom_ext_main(void) {
   shutdown_finalize(error);
 }
 
-OT_USED
 void rom_ext_interrupt_handler(void) { shutdown_finalize(rom_ext_irq_error()); }
 
 // We only need a single handler for all ROM_EXT interrupts, but we want to
 // keep distinct symbols to make writing tests easier.  In the ROM_EXT,
 // alias all interrupt handler symbols to the single handler.
-OT_USED
 OT_ALIAS("rom_ext_interrupt_handler")
 void rom_ext_exception_handler(void);
 
-OT_USED
 OT_ALIAS("rom_ext_interrupt_handler")
 void rom_ext_nmi_handler(void);
+
+// A no-op immutable rom_ext fallback to avoid breaking tests before the
+// proper bazel target is ready.
+// TODO(opentitan#24368): Remove this nop fallback.
+OT_SECTION(".rom_ext_immutable.fallback")
+void imm_rom_ext_placeholder(void) {}

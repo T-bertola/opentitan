@@ -36,16 +36,16 @@ impl Dispatch for List {
         hsm: &Module,
         _session: Option<&Session>,
     ) -> Result<Box<dyn Annotate>> {
-        let spx = hsm.spx.as_ref().ok_or(HsmError::SpxUnavailable)?;
+        let acorn = hsm.acorn.as_ref().ok_or(HsmError::AcornUnavailable)?;
         let _token = hsm.token.as_deref().ok_or(HsmError::SessionRequired)?;
 
         let mut result = Box::new(ListResult {
-            version: spx.get_version()?,
+            version: acorn.get_version()?,
             ..Default::default()
         });
-        let keys = spx.list_keys()?;
+        let keys = acorn.list_keys()?;
         for key in keys {
-            let info = spx.get_key_info(&key.alias)?;
+            let info = acorn.get_key_info(&key.alias)?;
             result.objects.push(Key {
                 id: info.hash,
                 label: key.alias,

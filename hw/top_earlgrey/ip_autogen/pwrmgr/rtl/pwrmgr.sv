@@ -11,9 +11,7 @@ module pwrmgr
   import pwrmgr_pkg::*;
   import pwrmgr_reg_pkg::*;
 #(
-  parameter logic [NumAlerts-1:0] AlertAsyncOn = {NumAlerts{1'b1}},
-  parameter int unsigned EscNumSeverities = 4,
-  parameter int unsigned EscPingCountWidth = 16
+  parameter logic [NumAlerts-1:0] AlertAsyncOn = {NumAlerts{1'b1}}
 ) (
   // Clocks and resets
   input clk_slow_i,
@@ -51,8 +49,8 @@ module pwrmgr
   output pwr_otp_req_t pwr_otp_o,
 
   // life cycle interface
-  input  lc_ctrl_pkg::pwr_lc_rsp_t pwr_lc_i,
-  output lc_ctrl_pkg::pwr_lc_req_t pwr_lc_o,
+  input  pwr_lc_rsp_t pwr_lc_i,
+  output pwr_lc_req_t pwr_lc_o,
 
   // flash interface
   input  pwr_flash_t pwr_flash_i,
@@ -135,8 +133,8 @@ module pwrmgr
 
   logic esc_rst_req_d, esc_rst_req_q;
   prim_esc_receiver #(
-    .N_ESC_SEV   (EscNumSeverities),
-    .PING_CNT_DW (EscPingCountWidth)
+    .N_ESC_SEV   (alert_handler_reg_pkg::N_ESC_SEV),
+    .PING_CNT_DW (alert_handler_reg_pkg::PING_CNT_DW)
   ) u_esc_rx (
     .clk_i(clk_esc),
     .rst_ni(rst_esc_n),
@@ -299,13 +297,13 @@ module pwrmgr
   logic slow_ack_pwrdn;
   logic slow_fsm_invalid;
   logic slow_main_pd_n;
-  logic slow_main_clk_en;
   logic slow_io_clk_en;
+  logic slow_core_clk_en;
   logic slow_usb_clk_en_lp;
   logic slow_usb_clk_en_active;
+  logic slow_clr_req;
   logic slow_usb_ip_clk_en;
   logic slow_usb_ip_clk_status;
-  logic slow_clr_req;
 
 
 
@@ -423,8 +421,8 @@ module pwrmgr
     .slow_wakeup_en_o(slow_wakeup_en),
     .slow_reset_en_o(slow_reset_en),
     .slow_main_pd_no(slow_main_pd_n),
-    .slow_main_clk_en_o(slow_main_clk_en),
     .slow_io_clk_en_o(slow_io_clk_en),
+    .slow_core_clk_en_o(slow_core_clk_en),
     .slow_usb_clk_en_lp_o(slow_usb_clk_en_lp),
     .slow_usb_clk_en_active_o(slow_usb_clk_en_active),
     .slow_req_pwrdn_o(slow_req_pwrdn),
@@ -444,8 +442,8 @@ module pwrmgr
     .wakeup_en_i(reg2hw.wakeup_en),
     .reset_en_i(reg2hw.reset_en),
     .main_pd_ni(reg2hw.control.main_pd_n.q),
-    .main_clk_en_i(reg2hw.control.core_clk_en.q),
     .io_clk_en_i(reg2hw.control.io_clk_en.q),
+    .core_clk_en_i(reg2hw.control.core_clk_en.q),
     .usb_clk_en_lp_i(reg2hw.control.usb_clk_en_lp.q),
     .usb_clk_en_active_i(reg2hw.control.usb_clk_en_active.q),
     .ack_pwrdn_o(ack_pwrdn),
@@ -566,8 +564,8 @@ module pwrmgr
     .usb_ip_clk_status_i  (slow_usb_ip_clk_status),
 
     .main_pd_ni           (slow_main_pd_n),
-    .main_clk_en_i        (slow_main_clk_en),
     .io_clk_en_i          (slow_io_clk_en),
+    .core_clk_en_i        (slow_core_clk_en),
     .usb_clk_en_lp_i      (slow_usb_clk_en_lp),
     .usb_clk_en_active_i  (slow_usb_clk_en_active),
 

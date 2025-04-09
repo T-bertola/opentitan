@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "sw/device/silicon_creator/lib/ownership/ownership.h"
 
-#include "sw/device/lib/base/abs_mmio.h"
 #include "sw/device/lib/base/hardened.h"
 #include "sw/device/lib/base/hardened_memory.h"
 #include "sw/device/lib/base/macros.h"
@@ -12,41 +11,31 @@
 #include "sw/device/silicon_creator/lib/dbg_print.h"
 #include "sw/device/silicon_creator/lib/drivers/flash_ctrl.h"
 #include "sw/device/silicon_creator/lib/drivers/hmac.h"
-#include "sw/device/silicon_creator/lib/drivers/lifecycle.h"
 #include "sw/device/silicon_creator/lib/error.h"
 #include "sw/device/silicon_creator/lib/ownership/ecdsa.h"
 #include "sw/device/silicon_creator/lib/ownership/owner_block.h"
 #include "sw/device/silicon_creator/lib/ownership/ownership.h"
-#include "sw/device/silicon_creator/lib/ownership/ownership_activate.h"
 #include "sw/device/silicon_creator/lib/ownership/ownership_key.h"
 
+// RAM copy of the owner INFO pages from flash.
+owner_block_t owner_page[2];
+owner_page_status_t owner_page_valid[2];
+
 static owner_page_status_t owner_page_validity_check(size_t page) {
+  size_t seal_len = (uintptr_t)&owner_page[0].seal - (uintptr_t)&owner_page[0];
   size_t sig_len =
       (uintptr_t)&owner_page[0].signature - (uintptr_t)&owner_page[0];
 
-  // Any non-constrained words of the owner block device_id field are required
-  // to be `kLockConstraintNone`.  We wipe the field and then fill in the
-  // relevant words from the lifecycle constroller.
-  //
-  // For node-locked owner configurations, this makes the device_id from the
-  // lifecycle controller relevant to the cryptographic verification.
-  memset(owner_page[page].device_id, 0, sizeof(owner_page[page].device_id));
-  lifecycle_device_id_t id;
-  lifecycle_device_id_get(&id);
-  for (uint32_t i = 0; i < ARRAYSIZE(owner_page[0].device_id); ++i) {
-    if (owner_page[page].lock_constraint & (1u << i)) {
-      owner_page[page].device_id[i] = id.device_id[i];
-    } else {
-      owner_page[page].device_id[i] = kLockConstraintNone;
-    }
-  }
-
-  rom_error_t sealed = ownership_seal_check(page);
-  if (sealed == kErrorOk) {
-    HARDENED_CHECK_EQ(sealed, kErrorOk);
+  // TODO(cfrantz): validate owner pages.
+  // For now, we consider the seal to be just the sha256 over the page.
+  // This really needs to be the KMAC over the page with a keymgr-created
+  // sealing secret.
+  hmac_digest_t digest;
+  hmac_sha256(&owner_page[page], seal_len, &digest);
+  if (hardened_memeq(owner_page[page].seal, digest.digest,
+                     ARRAYSIZE(digest.digest)) == kHardenedBoolTrue) {
     return kOwnerPageStatusSealed;
   }
-
   hardened_bool_t result = ownership_key_validate(page, kOwnershipKeyOwner,
                                                   &owner_page[page].signature,
                                                   &owner_page[page], sig_len);
@@ -58,43 +47,18 @@ static owner_page_status_t owner_page_validity_check(size_t page) {
   return kOwnerPageStatusSigned;
 }
 
-OT_WEAK rom_error_t
-sku_creator_owner_init(boot_data_t *bootdata, owner_config_t *config,
-                       owner_application_keyring_t *keyring) {
-  return kErrorOk;
+OT_WEAK rom_error_t test_owner_init(boot_data_t *bootdata,
+                                    owner_config_t *config,
+                                    owner_application_keyring_t *keyring) {
+  dbg_printf("error: no owner.\r\n");
+  return kErrorOwnershipNoOwner;
 }
 
 static rom_error_t locked_owner_init(boot_data_t *bootdata,
                                      owner_config_t *config,
                                      owner_application_keyring_t *keyring) {
-  if (owner_page_valid[0] == kOwnerPageStatusSealed &&
-      owner_page_valid[1] == kOwnerPageStatusSigned &&
-      owner_block_newversion_mode() == kHardenedBoolTrue &&
-      owner_page[1].config_version > owner_page[0].config_version &&
-      hardened_memeq(owner_page[0].owner_key.raw, owner_page[1].owner_key.raw,
-                     ARRAYSIZE(owner_page[0].owner_key.raw)) ==
-          kHardenedBoolTrue) {
-    rom_error_t error =
-        ownership_activate(bootdata, /*write_both_pages=*/kHardenedBoolFalse);
-    if (error == kErrorOk) {
-      HARDENED_CHECK_EQ(error, kErrorOk);
-      // Thunk the status of page 0 to Invalid so the next set of validity
-      // checks will copy the new page 1 content over to page 0 and establish a
-      // redundant backup of the new configuration.
-      owner_page_valid[0] = kOwnerPageStatusInvalid;
-      owner_page_valid[1] = kOwnerPageStatusSealed;
-    } else {
-      // If the new page wasn't good, we'll do nothing here and let the next set
-      // of validity checks copy page 0 over to page 1 and re-establish a
-      // redundant backup of the current configuration.
-    }
-  }
-
-  if (owner_page_valid[0] == kOwnerPageStatusSealed &&
+  if (owner_page_valid[0] == kOwnerPageStatusInvalid &&
       owner_page_valid[1] == kOwnerPageStatusSealed) {
-    // Both pages sealed, nothing to do.
-  } else if (owner_page_valid[0] != kOwnerPageStatusSealed &&
-             owner_page_valid[1] == kOwnerPageStatusSealed) {
     // Page 0 bad, Page 1 good: copy page 1 to page 0.
     memcpy(&owner_page[0], &owner_page[1], sizeof(owner_page[0]));
     HARDENED_RETURN_IF_ERROR(flash_ctrl_info_erase(
@@ -103,8 +67,7 @@ static rom_error_t locked_owner_init(boot_data_t *bootdata,
         &kFlashCtrlInfoPageOwnerSlot0, 0,
         sizeof(owner_page[0]) / sizeof(uint32_t), &owner_page[0]));
     owner_page_valid[0] = owner_page_valid[1];
-
-  } else if (owner_page_valid[1] != kOwnerPageStatusSealed &&
+  } else if (owner_page_valid[1] == kOwnerPageStatusInvalid &&
              owner_page_valid[0] == kOwnerPageStatusSealed) {
     // Page 1 bad, Page 0 good: copy page 0 to page 1.
     memcpy(&owner_page[1], &owner_page[0], sizeof(owner_page[0]));
@@ -114,7 +77,8 @@ static rom_error_t locked_owner_init(boot_data_t *bootdata,
         &kFlashCtrlInfoPageOwnerSlot1, 0,
         sizeof(owner_page[1]) / sizeof(uint32_t), &owner_page[1]));
     owner_page_valid[1] = owner_page_valid[0];
-  } else {
+  } else if (owner_page_valid[0] != kOwnerPageStatusSealed &&
+             owner_page_valid[1] != kOwnerPageStatusSealed) {
     // Neither page is valid; go to the Recovery state.
     dbg_printf("error: both owner pages invalid.\r\n");
     bootdata->ownership_state = kOwnershipStateRecovery;
@@ -123,23 +87,58 @@ static rom_error_t locked_owner_init(boot_data_t *bootdata,
     return kErrorOwnershipBadInfoPage;
   }
   HARDENED_RETURN_IF_ERROR(owner_block_parse(&owner_page[0], config, keyring));
-  HARDENED_RETURN_IF_ERROR(
-      owner_block_flash_apply(config->flash, kBootSlotA,
-                              /*lockdown=*/kHardenedBoolFalse));
-  HARDENED_RETURN_IF_ERROR(
-      owner_block_flash_apply(config->flash, kBootSlotB,
-                              /*lockdown=*/kHardenedBoolFalse));
+  HARDENED_RETURN_IF_ERROR(owner_block_flash_apply(config->flash, kBootSlotA,
+                                                   bootdata->primary_bl0_slot));
+  HARDENED_RETURN_IF_ERROR(owner_block_flash_apply(config->flash, kBootSlotB,
+                                                   bootdata->primary_bl0_slot));
   HARDENED_RETURN_IF_ERROR(owner_block_info_apply(config->info));
   return kErrorOk;
+}
+
+hardened_bool_t ownership_page1_valid_for_transfer(boot_data_t *bootdata) {
+  if (bootdata->ownership_state == kOwnershipStateLockedOwner &&
+      owner_page_valid[1] == kOwnerPageStatusSealed) {
+    return kHardenedBoolTrue;
+  }
+  if (owner_page_valid[1] == kOwnerPageStatusSigned) {
+    hmac_digest_t digest;
+    switch (bootdata->ownership_state) {
+      case kOwnershipStateUnlockedAny:
+        // In UnlockedAny, any valid (signed) Owner Page 1 is acceptable.
+        return kHardenedBoolTrue;
+      case kOwnershipStateLockedUpdate:
+        // In LockedUpdate, the owner key must be the same.  If not,
+        // skip parsing of Owner Page 1.
+        if (hardened_memeq(
+                owner_page[0].owner_key.key, owner_page[1].owner_key.key,
+                ARRAYSIZE(owner_page[0].owner_key.key)) == kHardenedBoolTrue) {
+          return kHardenedBoolTrue;
+        }
+        break;
+      case kOwnershipStateUnlockedEndorsed:
+        // In UnlockedEndorsed, the owner key must match the key endorsed by the
+        // next_owner field in bootdata.  If not, skip parsing owner page 1.
+        hmac_sha256(owner_page[1].owner_key.key,
+                    sizeof(owner_page[1].owner_key.key), &digest);
+        if (hardened_memeq(bootdata->next_owner, digest.digest,
+                           ARRAYSIZE(digest.digest)) == kHardenedBoolTrue) {
+          return kHardenedBoolTrue;
+        }
+        break;
+      default:
+          /* nothing */;
+    }
+  }
+  return kHardenedBoolFalse;
 }
 
 static rom_error_t unlocked_init(boot_data_t *bootdata, owner_config_t *config,
                                  owner_application_keyring_t *keyring) {
   uint32_t secondary =
       bootdata->primary_bl0_slot == kBootSlotA ? kBootSlotB : kBootSlotA;
-  if (bootdata->ownership_state == kOwnershipStateUnlockedSelf &&
+  if (bootdata->ownership_state == kOwnershipStateLockedUpdate &&
       owner_page_valid[0] != kOwnerPageStatusSealed) {
-    // Owner Page 0 must be sealed in the "UnlockedSelf" state.  If not,
+    // Owner Page 0 must be sealed in the "LockedUpdate" state.  If not,
     // go to the Recovery state.
     bootdata->ownership_state = kOwnershipStateRecovery;
     nonce_new(&bootdata->nonce);
@@ -151,27 +150,18 @@ static rom_error_t unlocked_init(boot_data_t *bootdata, owner_config_t *config,
     // Configure the primary half of the flash as Owner Page 0 requests.
     HARDENED_RETURN_IF_ERROR(
         owner_block_parse(&owner_page[0], config, keyring));
-    HARDENED_RETURN_IF_ERROR(
-        owner_block_flash_apply(config->flash, bootdata->primary_bl0_slot,
-                                /*lockdown=*/kHardenedBoolFalse));
+    HARDENED_RETURN_IF_ERROR(owner_block_flash_apply(
+        config->flash, bootdata->primary_bl0_slot, bootdata->primary_bl0_slot));
   }
 
-  if (owner_block_page1_valid_for_transfer(bootdata) == kHardenedBoolTrue) {
-    // If we passed the validity test for Owner Page 1, test parse the config.
-    owner_config_t testcfg;
-    owner_application_keyring_t testring;
-    rom_error_t result = owner_block_parse(&owner_page[1], &testcfg, &testring);
-    if (result == kErrorOk) {
-      // Parse the configuration and add its keys to the keyring.
-      HARDENED_RETURN_IF_ERROR(
-          owner_block_parse(&owner_page[1], config, keyring));
-    } else {
-      dbg_printf("error: owner page 1 invalid.\r\n");
-    }
+  if (ownership_page1_valid_for_transfer(bootdata) == kHardenedBoolTrue) {
+    // If we passed the validity test for Owner Page 1, parse the configuration
+    // and add its keys to the keyring.
+    HARDENED_RETURN_IF_ERROR(
+        owner_block_parse(&owner_page[1], config, keyring));
   }
-  HARDENED_RETURN_IF_ERROR(
-      owner_block_flash_apply(config->flash, secondary,
-                              /*lockdown=*/kHardenedBoolFalse));
+  HARDENED_RETURN_IF_ERROR(owner_block_flash_apply(config->flash, secondary,
+                                                   bootdata->primary_bl0_slot));
   HARDENED_RETURN_IF_ERROR(owner_block_info_apply(config->info));
   return kErrorOk;
 }
@@ -186,16 +176,11 @@ rom_error_t ownership_init(boot_data_t *bootdata, owner_config_t *config,
   flash_ctrl_cfg_t cfg = {
       .scrambling = kMultiBitBool4True,
       .ecc = kMultiBitBool4True,
-      .he = kMultiBitBool4False,
   };
   flash_ctrl_info_perms_set(&kFlashCtrlInfoPageOwnerSlot0, perm);
   flash_ctrl_info_cfg_set(&kFlashCtrlInfoPageOwnerSlot0, cfg);
   flash_ctrl_info_perms_set(&kFlashCtrlInfoPageOwnerSlot1, perm);
   flash_ctrl_info_cfg_set(&kFlashCtrlInfoPageOwnerSlot1, cfg);
-  // Set up the OwnerSecret page for ECC & Scrambling.  We won't
-  // turn on read/write/earse permissions until we need them.
-  flash_ctrl_info_cfg_set(&kFlashCtrlInfoPageOwnerSecret, cfg);
-
   // We don't want to abort ownership setup if we fail to
   // read the INFO pages, so we discard the error result.
   if (flash_ctrl_info_read(&kFlashCtrlInfoPageOwnerSlot0, 0,
@@ -220,7 +205,7 @@ rom_error_t ownership_init(boot_data_t *bootdata, owner_config_t *config,
   //     - Make sure page0 and page1 are identical and fix if not.
   //     - Set up flash config.
   //     - Enumerate application keys.
-  // - kOwnershipStateUnlockedSelf:
+  // - kOwnershipStateLockedUpdate:
   //     - Allow the pages to be different if the owner keys are the same.
   //     - Set up flash config: primary from page0, secondary from page 1.
   //     - Enumerate application keys from both pages.
@@ -238,26 +223,13 @@ rom_error_t ownership_init(boot_data_t *bootdata, owner_config_t *config,
 
   dbg_printf("ownership: %C\r\n", bootdata->ownership_state);
   owner_config_default(config);
-
-  // We give the weak `sku_creator_owner_init` function the opportunity to
-  // initialize ownership if it is uninitialized or needs updating.
-  //
-  // This is a temporary measure to get ownership configs installed on
-  // pre-existing silicon and to update the owner configuration automatically
-  // should we decide to update it during development.
-  //
-  // When we settle on a default ownership configuration, we'll remove this
-  // function and possibly relegate it to the `default` case below, only to
-  // be used should the chip enter the "no owner recovery" state.
-  HARDENED_RETURN_IF_ERROR(sku_creator_owner_init(bootdata, config, keyring));
-
   rom_error_t error = kErrorOwnershipNoOwner;
   // TODO(#22386): Harden this switch/case statement.
   switch (bootdata->ownership_state) {
     case kOwnershipStateLockedOwner:
       error = locked_owner_init(bootdata, config, keyring);
       break;
-    case kOwnershipStateUnlockedSelf:
+    case kOwnershipStateLockedUpdate:
       OT_FALLTHROUGH_INTENDED;
     case kOwnershipStateUnlockedAny:
       OT_FALLTHROUGH_INTENDED;
@@ -265,68 +237,16 @@ rom_error_t ownership_init(boot_data_t *bootdata, owner_config_t *config,
       error = unlocked_init(bootdata, config, keyring);
       break;
     default:
-        /* Do nothing. */;
+      // The `test_owner_init` function is weak and the default implementation
+      // does nothing.
+      error = test_owner_init(bootdata, config, keyring);
   }
   return error;
 }
 
-rom_error_t ownership_flash_lockdown(boot_data_t *bootdata,
-                                     uint32_t active_slot,
-                                     const owner_config_t *config) {
-  if (bootdata->ownership_state == kOwnershipStateLockedOwner) {
-    HARDENED_RETURN_IF_ERROR(owner_block_flash_apply(config->flash, kBootSlotA,
-                                                     /*lockdown=*/active_slot));
-    HARDENED_RETURN_IF_ERROR(owner_block_flash_apply(config->flash, kBootSlotB,
-                                                     /*lockdown=*/active_slot));
-  } else {
-    HARDENED_CHECK_NE(bootdata->ownership_state, kOwnershipStateLockedOwner);
-  }
-  return kErrorOk;
-}
-
-void ownership_pages_lockdown(boot_data_t *bootdata, hardened_bool_t rescue) {
-#ifdef ROM_EXT_KLOBBER_ALLOWED
-  if (rescue == kHardenedBoolTrue) {
-    // If ROM_EXT_KLOBBER_ALLOWED and we're in rescue mode, we skip
-    // lockdown because the rescue protcol is permitted, on DEV chips
-    // only, to erase the ownership pages.  This exists to simulate
-    // disaster scenarios and test the disaster recovery mechanisms.
-    //
-    // Under normal circumstances, the ROM_EXT is not built with this
-    // capability.
-    return;
-  }
-#endif
-  flash_ctrl_perms_t perm = {
-      .read = kMultiBitBool4True,
-      .write = kMultiBitBool4False,
-      .erase = kMultiBitBool4False,
-  };
-  flash_ctrl_cfg_t cfg = {
-      .scrambling = kMultiBitBool4True,
-      .ecc = kMultiBitBool4True,
-      .he = kMultiBitBool4False,
-  };
-  // Always make page 0 read only.
-  flash_ctrl_info_perms_set(&kFlashCtrlInfoPageOwnerSlot0, perm);
-  flash_ctrl_info_cfg_set(&kFlashCtrlInfoPageOwnerSlot0, cfg);
-  flash_ctrl_info_lock(&kFlashCtrlInfoPageOwnerSlot0);
-  if (rescue == kHardenedBoolTrue) {
-    // Do not lock page 1 in rescue mode.
-    HARDENED_CHECK_EQ(rescue, kHardenedBoolTrue);
-    return;
-  }
-  if (bootdata->ownership_state == kOwnershipStateLockedOwner) {
-    if (owner_block_newversion_mode() == kHardenedBoolTrue) {
-      // Leave page 1 unlocked if we're in "NewVersion" update mode.
-    } else {
-      // Otherwise, make the page read-only.
-      flash_ctrl_info_perms_set(&kFlashCtrlInfoPageOwnerSlot1, perm);
-      flash_ctrl_info_cfg_set(&kFlashCtrlInfoPageOwnerSlot1, cfg);
-    }
-  } else {
-    // In any of the unlocked modes, leave page 1 unlocked.
-  }
-  flash_ctrl_info_lock(&kFlashCtrlInfoPageOwnerSlot1);
-  return;
+void ownership_page_seal(size_t page) {
+  size_t seal_len = (uintptr_t)&owner_page[0].seal - (uintptr_t)&owner_page[0];
+  hmac_digest_t digest;
+  hmac_sha256(&owner_page[page], seal_len, &digest);
+  memcpy(&owner_page[page].seal, digest.digest, sizeof(digest.digest));
 }

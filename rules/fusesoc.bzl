@@ -2,8 +2,7 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 
-load("@bazel_skylib//lib:dicts.bzl", "dicts")
-load("@nonhermetic//:env.bzl", "BIN_PATHS", "ENV")
+load("@nonhermetic//:env.bzl", "ENV")
 
 """Rules for running FuseSoC.
 
@@ -31,9 +30,6 @@ def _fusesoc_build_impl(ctx):
     flags = [ctx.expand_location(f, ctx.attr.srcs) for f in ctx.attr.flags]
     outputs = []
     groups = {}
-
-    # Vivado expects `HOME` environment variable to exist. Redirect it to a fake directory.
-    home_dir = "{}/homeless-shelter".format(out_dir)
 
     cache_dir = "{}/fusesoc-cache".format(out_dir)
     cfg_file_path = "build.{}.fusesoc_config.toml".format(ctx.label.name)
@@ -70,7 +66,10 @@ def _fusesoc_build_impl(ctx):
         format_each = "--cores-root=%s",
     )
 
-    args.add("run")
+    args.add_all([
+        "run",
+        "--flag=fileset_top",
+    ])
     args.add(ctx.attr.target, format = "--target=%s")
     args.add_all([
         "--setup",
@@ -81,6 +80,8 @@ def _fusesoc_build_impl(ctx):
     args.add_all(ctx.attr.systems)
     args.add_all(flags)
 
+    # Note: the `fileset_top` flag used above is specific to the OpenTitan
+    # project to select the correct RTL fileset.
     ctx.actions.run(
         mnemonic = "FuseSoC",
         outputs = outputs,
@@ -90,15 +91,7 @@ def _fusesoc_build_impl(ctx):
         arguments = [args],
         executable = ctx.executable._fusesoc,
         use_default_shell_env = False,
-        env = dicts.add(
-            # Verilator build doesn't need nonhermetic environment variables
-            ENV if ctx.attr.target == "synth" else {},
-            {
-                "HOME": home_dir,
-                # Obtain the non-hermetic binary path and append Bazel's default PATH.
-                "PATH": BIN_PATHS["vivado" if ctx.attr.target == "synth" else "verilator"] + ":/bin:/usr/bin:/usr/local/bin",
-            },
-        ),
+        env = ENV,
     )
     return [
         DefaultInfo(

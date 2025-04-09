@@ -11,21 +11,28 @@
       {
         name: main
         aon: false
-        freq: 1000000000
+        freq: 100000000
         ref: false
       }
       io:
       {
         name: io
         aon: false
-        freq: 1000000000
+        freq: 96000000
+        ref: false
+      }
+      usb:
+      {
+        name: usb
+        aon: false
+        freq: 48000000
         ref: false
       }
       aon:
       {
         name: aon
         aon: true
-        freq: 62500000
+        freq: 200000
         ref: true
       }
     }
@@ -35,14 +42,14 @@
       {
         name: io_div2
         aon: false
-        freq: 500000000
+        freq: 48000000
         ref: false
         div: 2
         src:
         {
           name: io
           aon: no
-          freq: "1000000000"
+          freq: "96000000"
           ref: false
         }
       }
@@ -50,14 +57,14 @@
       {
         name: io_div4
         aon: false
-        freq: 250000000
+        freq: 24000000
         ref: false
         div: 4
         src:
         {
           name: io
           aon: no
-          freq: "1000000000"
+          freq: "96000000"
           ref: false
         }
       }
@@ -74,6 +81,11 @@
         clk_io_i:
         {
           src_name: io
+          endpoint_ip: clkmgr_aon
+        }
+        clk_usb_i:
+        {
+          src_name: usb
           endpoint_ip: clkmgr_aon
         }
         clk_aon_i:
@@ -104,6 +116,11 @@
           src_name: io
           endpoint_ip: rstmgr_aon
         }
+        clk_usb_powerup:
+        {
+          src_name: usb
+          endpoint_ip: rstmgr_aon
+        }
         clk_io_div2_powerup:
         {
           src_name: io_div2
@@ -113,6 +130,11 @@
         {
           src_name: aon
           endpoint_ip: soc_proxy
+        }
+        clk_aon_secure:
+        {
+          src_name: aon
+          endpoint_ip: sensor_ctrl
         }
         clk_aon_peri:
         {
@@ -136,6 +158,11 @@
         {
           src_name: main
           endpoint_ip: soc_proxy
+        }
+        clk_usb_infra:
+        {
+          src_name: usb
+          endpoint_ip: main
         }
         clk_io_div4_secure:
         {
@@ -164,6 +191,11 @@
         {
           src_name: io_div2
           endpoint_ip: spi_device
+        }
+        clk_usb_peri:
+        {
+          src_name: usb
+          endpoint_ip: ast
         }
       }
       hint_clks:
@@ -209,11 +241,13 @@
         io_div2
         io_div4
       ]
+      usb:
+      [
+        usb
+      ]
     }
     exported_clks: {}
     number_of_clock_groups: 7
-    with_alert_handler: true
     topname: darjeeling
-    uniquified_modules: {}
   }
 }

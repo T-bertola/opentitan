@@ -5,11 +5,9 @@
   instance_name: top_darjeeling_rv_plic
   param_values:
   {
-    module_instance_name: rv_plic
     src: 160
     target: 1
     prio: 3
     topname: darjeeling
-    uniquified_modules: {}
   }
 }

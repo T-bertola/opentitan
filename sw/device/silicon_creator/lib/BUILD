@@ -19,15 +19,6 @@ load(
 
 package(default_visibility = ["//visibility:public"])
 
-cc_library(
-    name = "boot_data_header",
-    hdrs = ["boot_data.h"],
-    deps = [
-        ":nonce_header",
-        "//sw/device/silicon_creator/lib/drivers:lifecycle",
-    ],
-)
-
 dual_cc_library(
     name = "boot_data",
     srcs = dual_inputs(
@@ -36,11 +27,12 @@ dual_cc_library(
     ),
     hdrs = dual_inputs(
         host = ["mock_boot_data.h"],
+        shared = ["boot_data.h"],
     ),
     deps = dual_inputs(
         device = [
-            "//hw/top:otp_ctrl_c_regs",
-            "//hw/top:flash_ctrl_c_regs",
+            "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
+            "//hw/top_earlgrey/ip_autogen/flash_ctrl:flash_ctrl_c_regs",
             "//hw/top_earlgrey/sw/autogen:top_earlgrey",
             "//sw/device/lib/base:hardened",
             "//sw/device/lib/base:memory",
@@ -51,7 +43,6 @@ dual_cc_library(
             "@googletest//:gtest",
         ],
         shared = [
-            ":boot_data_header",
             ":error",
             ":nonce",
             "//sw/device/lib/base:macros",
@@ -103,8 +94,8 @@ cc_library(
     srcs = ["boot_log.c"],
     hdrs = ["boot_log.h"],
     deps = [
-        ":boot_data_header",
-        ":nonce_header",
+        ":boot_data",
+        ":nonce",
         "//sw/device/lib/base:macros",
         "//sw/device/silicon_creator/lib:chip_info",
         "//sw/device/silicon_creator/lib:error",
@@ -207,10 +198,10 @@ cc_library(
     srcs = ["irq_asm.S"],
     target_compatible_with = [OPENTITAN_CPU],
     deps = [
-        "//hw/top:aon_timer_c_regs",
-        "//hw/top:flash_ctrl_c_regs",
-        "//hw/top:pwrmgr_c_regs",
-        "//hw/top:rstmgr_c_regs",
+        "//hw/ip/aon_timer/data:aon_timer_c_regs",
+        "//hw/top_earlgrey/ip_autogen/flash_ctrl:flash_ctrl_c_regs",
+        "//hw/top_earlgrey/ip_autogen/pwrmgr:pwrmgr_c_regs",
+        "//hw/top_earlgrey/ip_autogen/rstmgr:rstmgr_c_regs",
         "//hw/top_earlgrey/sw/autogen:top_earlgrey",
         "//sw/device/lib/base:multibits",
     ],
@@ -278,7 +269,7 @@ dual_cc_library(
     ),
     deps = dual_inputs(
         device = [
-            "//hw/top:top_lib",
+            "//hw/top_earlgrey/sw/autogen:top_earlgrey",
         ],
         host = [
             "//sw/device/lib/base:global_mock",
@@ -367,15 +358,15 @@ dual_cc_library(
             "//sw/device/lib/base:hardened",
             "//sw/device/lib/base:macros",
             "//sw/device/silicon_creator/lib/drivers:lifecycle",
-            "//hw/top:keymgr_c_regs",
-            "//hw/top:lc_ctrl_c_regs",
-            "//hw/top:otp_ctrl_c_regs",
-            "//hw/top:rv_core_ibex_c_regs",
-            "//hw/top:sram_ctrl_c_regs",
-            "//hw/top:uart_c_regs",
-            "//hw/top:alert_handler_c_regs",
-            "//hw/top:flash_ctrl_c_regs",
-            "//hw/top:rstmgr_c_regs",
+            "//hw/ip/keymgr/data:keymgr_c_regs",
+            "//hw/ip/lc_ctrl/data:lc_ctrl_c_regs",
+            "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
+            "//hw/ip/rv_core_ibex/data:rv_core_ibex_c_regs",
+            "//hw/ip/sram_ctrl/data:sram_ctrl_c_regs",
+            "//hw/ip/uart/data:uart_c_regs",
+            "//hw/top_earlgrey:alert_handler_c_regs",
+            "//hw/top_earlgrey/ip_autogen/flash_ctrl:flash_ctrl_c_regs",
+            "//hw/top_earlgrey/ip_autogen/rstmgr:rstmgr_c_regs",
             "//hw/top_earlgrey/sw/autogen:top_earlgrey",
             "//sw/device/silicon_creator/lib/drivers:retention_sram",
             "//sw/device/lib/arch:device",
@@ -429,7 +420,7 @@ cc_library(
     srcs = ["bootstrap_fuzzer_util.cc"],
     hdrs = ["bootstrap_fuzzer_util.h"],
     deps = [
-        "//hw/top:flash_ctrl_c_regs",
+        "//hw/top_earlgrey/ip_autogen/flash_ctrl:flash_ctrl_c_regs",
         "//hw/top_earlgrey/sw/autogen:top_earlgrey",
         "//sw/device/lib/base:hardened",
         "//sw/device/silicon_creator/lib:bootstrap_unittest_util",
@@ -447,9 +438,9 @@ cc_library(
     hdrs = ["bootstrap_unittest_util.h"],
     deps = [
         ":bootstrap",
-        "//hw/top:flash_ctrl_c_regs",
-        "//hw/top:gpio_c_regs",
-        "//hw/top:otp_ctrl_c_regs",
+        "//hw/ip/gpio/data:gpio_c_regs",
+        "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
+        "//hw/top_earlgrey/ip_autogen/flash_ctrl:flash_ctrl_c_regs",
         "//hw/top_earlgrey/sw/autogen:top_earlgrey",
         "//sw/device/silicon_creator/lib/base:chip",
     ],
@@ -461,17 +452,10 @@ cc_library(
 )
 
 cc_library(
-    name = "nonce_header",
-    hdrs = ["nonce.h"],
-)
-
-cc_library(
     name = "nonce",
     srcs = ["nonce.c"],
-    deps = [
-        ":nonce_header",
-        "//sw/device/silicon_creator/lib/drivers:rnd",
-    ],
+    hdrs = ["nonce.h"],
+    deps = ["//sw/device/silicon_creator/lib/drivers:rnd"],
 )
 
 cc_library(
@@ -483,7 +467,6 @@ cc_library(
     deps = [
         ":attestation",
         "//sw/device/lib/base:macros",
-        "//sw/device/lib/base:memory",
         "//sw/device/silicon_creator/lib:dbg_print",
         "//sw/device/silicon_creator/lib:error",
         "//sw/device/silicon_creator/lib/base:sec_mmio",

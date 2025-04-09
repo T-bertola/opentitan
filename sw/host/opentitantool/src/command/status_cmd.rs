@@ -41,7 +41,6 @@ struct ConsolidateRecord {
 }
 
 impl CommandDispatch for ListCommand {
-    #[allow(clippy::unwrap_or_default)] // or_default cannot be used due to type inference.
     fn run(
         &self,
         _context: &dyn Any,
@@ -105,7 +104,7 @@ impl CommandDispatch for LintCommand {
             for record in records.records {
                 mod_id_map
                     .entry(record.get_module_id()?)
-                    .or_default()
+                    .or_insert_with(HashSet::new)
                     .insert(ModuleIdProvenance {
                         filename: record.filename.into(),
                         overriden: record.module_id.is_some(),

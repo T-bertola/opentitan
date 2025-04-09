@@ -293,13 +293,7 @@ class Mapping1:
                         Path('.') if have_patch_dir else None)
 
     @staticmethod
-    def apply_patch(basepath, patchfile):
-        # Sometimes basepath is actually a file to which the patch should be applied.
-        # In that case, make basedir point to the containing directory instead of the file.
-        if os.path.isfile(basepath):
-            basedir = os.path.dirname(basepath)
-        else:
-            basedir = basepath
+    def apply_patch(basedir, patchfile):
         cmd = ['git', 'apply', '--directory', str(basedir), '-p1',
                str(patchfile)]
         if verbose:

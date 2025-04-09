@@ -73,17 +73,5 @@
       act:    "req"
       package: "tlul_pkg"
     }
-    { struct: "tl"
-      type:   "req_rsp"
-      name:   "tl_racl_ctrl"
-      act:    "req"
-      package: "tlul_pkg"
-    }
-    { struct: "tl"
-      type:   "req_rsp"
-      name:   "tl_ac_range_check"
-      act:    "req"
-      package: "tlul_pkg"
-    }
   ]
 }

@@ -6,51 +6,15 @@ ${gencmd}
 import textwrap
 import topgen.lib as lib
 
-# TODO: Handle cases where there could be multiple instances of these in the
-# IPs below in the design.
-pwrmgr = lib.find_module(top['module'], 'pwrmgr')
-if pwrmgr is not None:
-    has_pwrmgr = addr_space in pwrmgr['base_addrs'][None]
-else:
-    has_pwrmgr = False
-
-pinmux = lib.find_module(top['module'], 'pinmux')
-if pinmux is not None:
-    has_pinmux = addr_space in pinmux['base_addrs'][None]
-else:
-    has_pinmux = False
-
-alert_handler = lib.find_module(top['module'], 'alert_handler')
-if alert_handler is not None:
-    has_alert_handler = addr_space in alert_handler['base_addrs'][None]
-else:
-    has_alert_handler = False
-
-clkmgr = lib.find_module(top['module'], 'clkmgr')
-if clkmgr is not None:
-    has_clkmgr = addr_space in clkmgr['base_addrs'][None]
-else:
-    has_clkmgr = False
-
-rstmgr = lib.find_module(top['module'], 'rstmgr')
-if rstmgr is not None:
-    has_rstmgr = addr_space in rstmgr['base_addrs'][None]
-else:
-    has_rstmgr = False
-
-plic = lib.find_module(top['module'], 'rv_plic')
-if plic is not None:
-    has_plic = addr_space in plic['base_addrs'][None]
-else:
-    has_plic = False
-
-addr_space_obj = lib.get_addr_space(top, addr_space)
-addr_space_suffix = lib.get_addr_space_suffix(addr_space_obj)
-header_suffix = (top["name"] + addr_space_suffix).upper()
+has_pwrmgr = lib.find_module(top['module'], 'pwrmgr')
+has_pinmux = lib.find_module(top['module'], 'pinmux')
+has_alert_handler = lib.find_module(top['module'], 'alert_handler') or top['name'] == 'englishbreakfast'
+has_clkmgr = lib.find_module(top['module'], 'clkmgr')
+has_rstmgr = lib.find_module(top['module'], 'rstmgr')
 %>\
 
-#ifndef ${helper.header_macro_prefix}_TOP_${header_suffix}_H_
-#define ${helper.header_macro_prefix}_TOP_${header_suffix}_H_
+#ifndef ${helper.header_macro_prefix}_TOP_${top["name"].upper()}_H_
+#define ${helper.header_macro_prefix}_TOP_${top["name"].upper()}_H_
 
 /**
  * @file
@@ -62,9 +26,7 @@ header_suffix = (top["name"] + addr_space_suffix).upper()
  * These definitions are for information that depends on the top-specific chip
  * configuration, which includes:
  * - Device Memory Information (for Peripherals and Memory)
-% if has_plic:
  * - PLIC Interrupt ID Names and Source Mappings
-% endif
 % if has_alert_handler:
  * - Alert ID Names and Source Mappings
 % endif
@@ -80,7 +42,7 @@ header_suffix = (top["name"] + addr_space_suffix).upper()
 extern "C" {
 #endif
 
-% for (inst_name, if_name), region in helper.devices(addr_space):
+% for (inst_name, if_name), region in helper.devices():
 <%
     if_desc = inst_name if if_name is None else '{} device on {}'.format(if_name, inst_name)
     hex_base_addr = "0x{:X}u".format(region.base_addr)
@@ -110,7 +72,7 @@ extern "C" {
 
 % endfor
 
-% for name, region in helper.memories(addr_space):
+% for name, region in helper.memories():
 <%
     hex_base_addr = "0x{:X}u".format(region.base_addr)
     hex_size_bytes = "0x{:X}u".format(region.size_bytes)
@@ -130,7 +92,6 @@ extern "C" {
 #define ${size_bytes_name} ${hex_size_bytes}
 
 % endfor
-% if has_plic:
 
 /**
  * PLIC Interrupt Source Peripheral.
@@ -163,7 +124,6 @@ ${helper.plic_mapping.render_declaration()}
  * access for a given interrupt target.
  */
 ${helper.plic_targets.render()}
-% endif
 % if has_alert_handler:
 
 /**
@@ -271,7 +231,7 @@ ${helper.clkmgr_gateable_clocks.render()}
  */
 ${helper.clkmgr_hintable_clocks.render()}
 % endif
-% for (subspace_name, description, subspace_range) in helper.subranges[addr_space]:
+% for (subspace_name, description, subspace_range) in helper.subranges:
 
 /**
  * ${subspace_name.upper()} Region
@@ -289,4 +249,4 @@ ${helper.clkmgr_hintable_clocks.render()}
 }  // extern "C"
 #endif
 
-#endif  // ${helper.header_macro_prefix}_TOP_${header_suffix}_H_
+#endif  // ${helper.header_macro_prefix}_TOP_${top["name"].upper()}_H_

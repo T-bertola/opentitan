@@ -6,7 +6,7 @@ use anyhow::Result;
 use serde::{self, Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use zerocopy::IntoBytes;
+use zerocopy::AsBytes;
 
 use crate::image::manifest::*;
 use crate::image::manifest_def::le_bytes_to_word_arr;
@@ -192,13 +192,13 @@ impl ManifestExtEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testdata;
     use crate::util::num_de::HexEncoded;
-    use crate::util::testdata;
 
     #[test]
     fn test_manifest_ext_from_hjson() {
-        let spec = ManifestExtSpec::read_from_file(&testdata("image/manifest_ext.hjson")).unwrap();
-        assert_eq!(spec.source_path(), Some(testdata("image").as_path()));
+        let spec = ManifestExtSpec::read_from_file(&testdata!("manifest_ext.hjson")).unwrap();
+        assert_eq!(spec.source_path(), Some(testdata!().as_path()));
         assert_eq!(spec.signed_region.len(), 2);
         assert_eq!(
             spec.signed_region[0],

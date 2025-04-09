@@ -10,12 +10,6 @@
       default: ""
     }
     {
-      name: "uniquified_modules"
-      desc: "A dictionary mapping template_names to uniquified_names"
-      type: "object"
-      default: {"clkmgr": "clkmgr1"}
-    }
-    {
       name: "n_wkup_detect"
       desc: "Number of wakeups"
       type: "int"
@@ -74,12 +68,6 @@
       desc: "Set to true to instantiate the HW strap sampling and TAP selection submodule wake submodule"
       type: "bool"
       default: "1"
-    }
-    {
-      name: "module_instance_name"
-      desc: "instance name in case there are multiple pinmux instances. Not yet implemented."
-      type: "string"
-      default: "pinmux"
     }
   ]
 }

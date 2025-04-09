@@ -263,17 +263,8 @@ def _presigning_artifacts(ctx, opentitantool, src, manifest, ecdsa_key, rsa_key,
             executable = opentitantool,
             mnemonic = "PreSigningSpxMessage",
         )
-        signing_directives.append(struct(
-            command = "spx-sign",
-            id = None,
-            label = spx_key.name,
-            little_endian = False,
-            # TODO(cfrantz): Update the format/domain when we can support pre-hashed signing.
-            format = "PlainText",
-            domain = "Pure",
-            output = "{}.spx_sig".format(basename),
-            input = "{}.spx-message".format(basename),
-        ))
+        # TODO(cfrantz): After adding SPX support to hsmtool, append an appropriate
+        # signing directive here.
 
     return struct(pre = pre, digest = digest, spxmsg = spxmsg, script = signing_directives)
 
@@ -352,7 +343,7 @@ def _local_sign(ctx, tool, digest, ecdsa_key, rsa_key, spxmsg = None, spx_key = 
         fail("Expected an ECDSA or RSA key")
 
 def _hsmtool_sign(ctx, tool, digest, ecdsa_key, rsa_key, spxmsg = None, spx_key = None, profile = None):
-    """Sign a digest with a token-provided private key.
+    """Sign a digest with a local on-disk RSA private key.
 
     Args:
         ctx: The rule context.
@@ -366,6 +357,8 @@ def _hsmtool_sign(ctx, tool, digest, ecdsa_key, rsa_key, spxmsg = None, spx_key 
     Returns:
         file, file, file: The RSA and SPX signature files.
     """
+    if spxmsg or spx_key:
+        fail("hsmtool currently does not support SPX+ signing")
     if not profile:
         fail("Missing the `hsmtool` profile")
 
@@ -373,13 +366,11 @@ def _hsmtool_sign(ctx, tool, digest, ecdsa_key, rsa_key, spxmsg = None, spx_key 
         cmd = "rsa"
         sig = ctx.actions.declare_file(paths.replace_extension(digest.basename, ".rsa-sig"))
         label = rsa_key.name
-        mnemonic = "HsmtoolRsaSign"
         retval = (None, sig, None)
     elif ecdsa_key:
         cmd = "ecdsa"
         sig = ctx.actions.declare_file(paths.replace_extension(digest.basename, ".ecdsa-sig"))
         label = ecdsa_key.name
-        mnemonic = "HsmtoolEcdsaSign"
         retval = (sig, None, None)
     else:
         fail("Expected either rsa_key or ecdsa_key; got neither")
@@ -404,40 +395,9 @@ def _hsmtool_sign(ctx, tool, digest, ecdsa_key, rsa_key, spxmsg = None, spx_key 
             "no-sandbox": "",
         },
         env = tool.env,
-        mnemonic = mnemonic,
+        mnemonic = "HsmtoolRsaSign",
     )
-
-    spx_sig = None
-    if spxmsg and spx_key:
-        spx_sig = ctx.actions.declare_file(paths.replace_extension(spxmsg.basename, ".spx-sig"))
-        ctx.actions.run(
-            outputs = [spx_sig],
-            inputs = [spxmsg, tool.tool] + tool.data,
-            arguments = [
-                "--quiet",
-                "--lockfile=/tmp/hsmtool.lock",
-                "--profile={}".format(profile),
-                "spx",
-                "sign",
-                "--format=plain-text",
-                "--label={}".format(spx_key.name),
-                "--output={}".format(spx_sig.path),
-                spxmsg.path,
-            ],
-            executable = tool.tool,
-            execution_requirements = {
-                "no-sandbox": "",
-            },
-            env = tool.env,
-            mnemonic = "HsmtoolSpxSign",
-        )
-
-    if rsa_key:
-        return None, sig, spx_sig
-    elif ecdsa_key:
-        return sig, None, spx_sig
-    else:
-        fail("Expected an ECDSA or RSA key")
+    return retval
 
 def _post_signing_attach(ctx, opentitantool, pre, ecdsa_sig, rsa_sig, spx_sig):
     """Attach signatures to an unsigned binary.

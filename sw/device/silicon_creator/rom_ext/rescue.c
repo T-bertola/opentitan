@@ -9,7 +9,6 @@
 #include "sw/device/silicon_creator/lib/boot_data.h"
 #include "sw/device/silicon_creator/lib/dbg_print.h"
 #include "sw/device/silicon_creator/lib/drivers/flash_ctrl.h"
-#include "sw/device/silicon_creator/lib/drivers/lifecycle.h"
 #include "sw/device/silicon_creator/lib/drivers/retention_sram.h"
 #include "sw/device/silicon_creator/lib/drivers/rstmgr.h"
 #include "sw/device/silicon_creator/lib/drivers/uart.h"
@@ -61,10 +60,8 @@ rom_error_t flash_firmware_block(rescue_state_t *state) {
 
 rom_error_t flash_owner_block(rescue_state_t *state, boot_data_t *bootdata) {
   if (bootdata->ownership_state == kOwnershipStateUnlockedAny ||
-      bootdata->ownership_state == kOwnershipStateUnlockedSelf ||
-      bootdata->ownership_state == kOwnershipStateUnlockedEndorsed ||
-      (bootdata->ownership_state == kOwnershipStateLockedOwner &&
-       owner_block_newversion_mode() == kHardenedBoolTrue)) {
+      bootdata->ownership_state == kOwnershipStateLockedUpdate ||
+      bootdata->ownership_state == kOwnershipStateUnlockedEndorsed) {
     HARDENED_RETURN_IF_ERROR(flash_ctrl_info_erase(
         &kFlashCtrlInfoPageOwnerSlot1, kFlashCtrlEraseTypePage));
     HARDENED_RETURN_IF_ERROR(flash_ctrl_info_write(
@@ -112,57 +109,15 @@ static void change_speed(void) {
   }
 }
 
-#ifdef ROM_EXT_KLOBBER_ALLOWED
-// In order to facilitate debuging and manual test flows for ownerhsip transfer,
-// we allow the owner pages to be erased if and only if the chip is in the DEV
-// lifecycle state AND the ROM_EXT was specifically built to allow owner erase.
-//
-// In the general case, the `KLBR` command does not exist.  It can only be
-// enabled by silicon_creator and only for DEV chips.
-static void ownership_erase(void) {
-  lifecycle_state_t lc_state = lifecycle_state_get();
-  if (lc_state == kLcStateDev) {
-    OT_DISCARD(flash_ctrl_info_erase(&kFlashCtrlInfoPageOwnerSlot0,
-                                     kFlashCtrlEraseTypePage));
-    OT_DISCARD(flash_ctrl_info_erase(&kFlashCtrlInfoPageOwnerSlot1,
-                                     kFlashCtrlEraseTypePage));
-    dbg_printf("ok: erased owner blocks\r\n");
-  } else {
-    dbg_printf("error: erase not allowed in state %x\r\n", lc_state);
-  }
-}
-#endif
-
 static void validate_mode(uint32_t mode, rescue_state_t *state,
                           boot_data_t *bootdata) {
   dbg_printf("\r\nmode: %C\r\n", bitfield_byteswap32(mode));
-
-  // The following commands are always allowed and are not subject to
-  // the "command allowed" check.
-  switch (mode) {
-    case kRescueModeBaud:
-      change_speed();
-      goto exitproc;
-    case kRescueModeReboot:
-      dbg_printf("ok: reboot\r\n");
-      state->mode = (rescue_mode_t)mode;
-      goto exitproc;
-    case kRescueModeWait:
-      dbg_printf("ok: wait after upload\r\n");
-      state->reboot = false;
-      goto exitproc;
-#ifdef ROM_EXT_KLOBBER_ALLOWED
-    case kRescueModeKlobber:
-      ownership_erase();
-      goto exitproc;
-#endif
-    default:
-        /* do nothing */;
-  }
-
   hardened_bool_t allow = owner_rescue_command_allowed(state->config, mode);
   if (allow == kHardenedBoolTrue) {
     switch (mode) {
+      case kRescueModeBaud:
+        change_speed();
+        return;
       case kRescueModeBootLog:
         dbg_printf("ok: receive boot_log via xmodem-crc\r\n");
         break;
@@ -174,10 +129,8 @@ static void validate_mode(uint32_t mode, rescue_state_t *state,
         break;
       case kRescueModeOwnerBlock:
         if (bootdata->ownership_state == kOwnershipStateUnlockedAny ||
-            bootdata->ownership_state == kOwnershipStateUnlockedSelf ||
-            bootdata->ownership_state == kOwnershipStateUnlockedEndorsed ||
-            (bootdata->ownership_state == kOwnershipStateLockedOwner &&
-             owner_block_newversion_mode() == kHardenedBoolTrue)) {
+            bootdata->ownership_state == kOwnershipStateLockedUpdate ||
+            bootdata->ownership_state == kOwnershipStateUnlockedEndorsed) {
           dbg_printf("ok: send owner_block via xmodem-crc\r\n");
         } else {
           dbg_printf("error: cannot accept owner_block in current state\r\n");
@@ -188,12 +141,8 @@ static void validate_mode(uint32_t mode, rescue_state_t *state,
       case kRescueModeFirmwareSlotB:
         dbg_printf("ok: send firmware via xmodem-crc\r\n");
         break;
-      case kRescueModeOwnerPage0:
-      case kRescueModeOwnerPage1:
-        dbg_printf("ok: receive owner page via xmodem-crc\r\n");
-        break;
-      case kRescueModeOpenTitanID:
-        dbg_printf("ok: receive device ID via xmodem-crc\r\n");
+      case kRescueModeReboot:
+        dbg_printf("ok: reboot\r\n");
         break;
       default:
         // User input error.  Do not change modes.
@@ -204,7 +153,6 @@ static void validate_mode(uint32_t mode, rescue_state_t *state,
   } else {
     dbg_printf("error: mode not allowed\r\n");
   }
-exitproc:
   state->frame = 1;
   state->offset = 0;
   state->flash_offset = 0;
@@ -228,22 +176,6 @@ static rom_error_t handle_send_modes(rescue_state_t *state,
       HARDENED_RETURN_IF_ERROR(xmodem_send(iohandle, &rr->creator.boot_svc_msg,
                                            sizeof(rr->creator.boot_svc_msg)));
       break;
-    case kRescueModeOpenTitanID: {
-      lifecycle_device_id_t id;
-      lifecycle_device_id_get(&id);
-      HARDENED_RETURN_IF_ERROR(xmodem_send(iohandle, &id, sizeof(id)));
-      break;
-    }
-    case kRescueModeOwnerPage0:
-    case kRescueModeOwnerPage1:
-      HARDENED_RETURN_IF_ERROR(flash_ctrl_info_read(
-          state->mode == kRescueModeOwnerPage0 ? &kFlashCtrlInfoPageOwnerSlot0
-                                               : &kFlashCtrlInfoPageOwnerSlot1,
-          0, sizeof(state->data) / sizeof(uint32_t), state->data));
-      HARDENED_RETURN_IF_ERROR(
-          xmodem_send(iohandle, state->data, sizeof(state->data)));
-      break;
-
     case kRescueModeBootSvcReq:
     case kRescueModeOwnerBlock:
     case kRescueModeFirmware:
@@ -275,9 +207,6 @@ static rom_error_t handle_recv_modes(rescue_state_t *state,
   switch (state->mode) {
     case kRescueModeBootLog:
     case kRescueModeBootSvcRsp:
-    case kRescueModeOpenTitanID:
-    case kRescueModeOwnerPage0:
-    case kRescueModeOwnerPage1:
       // Nothing to do for send modes.
       break;
     case kRescueModeBootSvcReq:

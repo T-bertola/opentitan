@@ -15,18 +15,14 @@
 class USBDevice {
  public:
 #if STREAMTEST_LIBUSB
-  USBDevice(bool verbose = false, bool manual = false)
+  USBDevice(bool verbose = false)
       : verbose_(verbose),
-        manual_(manual),
         state_(StateStreaming),
         ctx_(nullptr),
         devh_(nullptr) {}
 #else
-  USBDevice(bool verbose = false, bool manual = false)
-      : verbose_(verbose),
-        manual_(manual),
-        state_(StateStreaming),
-        devh_(false) {}
+  USBDevice(bool verbose = false)
+      : verbose_(verbose), state_(StateStreaming), devh_(false) {}
 #endif
 
   // Device states.
@@ -36,50 +32,6 @@ class USBDevice {
     StateSuspended,
     StateResuming
   };
-
-  /**
-   * Test phases; named according to the event that we are expecting to occur.
-   */
-  typedef enum {
-    /**
-     * First test phase just tests regular Suspend/Resume signaling; after we've
-     * resumed, we expect a Bus Reset from the DPI/Host.
-     */
-    kSuspendPhaseSuspend = 0u,
-    /**
-     * This test phase instructs the DPI model to put the DUT into Suspend long
-     * enough that this software will attempt to put the device into its Normal
-     * Sleep state and exercise the AON/Wakeup module, stopping the clocks but
-     * not powering down.
-     */
-    kSuspendPhaseSleepResume,
-    /*
-     * The AON/Wakeup module will cause us to awaken in response to a bus reset.
-     */
-    kSuspendPhaseSleepReset,
-    /**
-     * As above, but this time we're expecting a VBUS/SENSE loss.
-     */
-    kSuspendPhaseSleepDisconnect,
-    /**
-     * Mirrors Resume detection for normal sleep, but this time we enter Deep
-     * Sleep and the power is removed too.
-     */
-    kSuspendPhaseDeepResume,
-    /**
-     * Mirrors Bus Reset detection for normal sleep, but this time we enter Deep
-     * Sleep and the power is removed too.
-     */
-    kSuspendPhaseDeepReset,
-    /**
-     * As above, but this time we're expecting a VBUS/SENSE loss.
-     */
-    kSuspendPhaseDeepDisconnect,
-    /**
-     * Final phase; shut down.
-     */
-    kSuspendPhaseShutdown,
-  } usbdev_suspend_phase_t;
 
   // DPI test numbers.
   typedef enum usb_testutils_test_number {
@@ -291,33 +243,7 @@ class USBDevice {
     return libusb_cancel_transfer(xfr);
   }
 #endif
-  /**
-   * Is test progress being directed/controlled manually?
-   */
-  inline bool ManualControl() const { return manual_; }
-  /**
-   * Returns the current phase of the test
-   */
-  inline usbdev_suspend_phase_t TestPhase() const { return testPhase_; }
-  /**
-   * Returns microseconds corresponding to the given number of bus frame delays.
-   */
-  static inline uint32_t TimeFrames(unsigned frames) { return frames * 1000u; }
-  /**
-   * Delay for at least the requested number of microseconds (wall time);
-   * this is important in ensuring the appropriate time intervals (eg. Resume
-   * Signaling) are met.
-   *
-   * For verbose reporting, the also indicates whether traffic is expected, and
-   * may be visually paired up with any device-side logging or logic analyzer
-   * traces.
-   *
-   * @param time_us      Minimum time delay, in microseconds.
-   * @param with_traffic Indicates whether USB traffic is expected during this
-   * time.
-   * @return true iff delayed without error
-   */
-  bool Delay(uint32_t time_us, bool with_traffic = true);
+
   /**
    * Read Test Descriptor from the DUT using a Vendor-Specific command.
    *
@@ -357,24 +283,11 @@ class USBDevice {
    */
   bool Resume();
   /**
-   * Connect device to the USB.
-   *
-   * @param true iff the operation was succesful.
-   */
-  bool Connect();
-  /**
-   * Disconnect device from the USB.
+   * Disconnect and reconnect device.
    *
    * @param true iff the operation was succesful.
    */
   bool Disconnect();
-  /**
-   * Return the textual name of the specified test phase.
-   *
-   * @param  phase     Test phase.
-   * @return           Textual name.
-   */
-  static const char *PhaseName(usbdev_suspend_phase_t phase);
   /**
    * Returns the current state of the device.
    *
@@ -391,9 +304,6 @@ class USBDevice {
  private:
   // Verbose logging/reporting.
   bool verbose_;
-
-  // Test phases/behavior are being directed/controlled manually.
-  bool manual_;
 
   // Current device state.
   USBDevState state_;
@@ -420,10 +330,6 @@ class USBDevice {
   // Device handle.
   libusb_device_handle *devh_;
 
-  // Parent device handler.
-  libusb_device_handle *parenth_;
-  int portNumber_;
-
   // Device descriptor.
   libusb_device_descriptor devDesc_;
 #else
@@ -433,9 +339,6 @@ class USBDevice {
 
   // Device path (bus number - ports numbers).
   std::string devPath_;
-
-  // Current phase within the Suspend-Sleep-Wakeup-Resume testing sequence.
-  usbdev_suspend_phase_t testPhase_;
 
   usb_testutils_test_number_t testNumber_;
 

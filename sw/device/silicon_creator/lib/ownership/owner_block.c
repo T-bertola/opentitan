@@ -4,72 +4,20 @@
 
 #include "sw/device/silicon_creator/lib/ownership/owner_block.h"
 
+#include <stdio.h>
+
 #include "sw/device/lib/base/bitfield.h"
 #include "sw/device/lib/base/hardened.h"
-#include "sw/device/lib/base/hardened_memory.h"
 #include "sw/device/lib/base/macros.h"
-#include "sw/device/lib/base/memory.h"
-#include "sw/device/silicon_creator/lib/base/chip.h"
 #include "sw/device/silicon_creator/lib/boot_data.h"
 #include "sw/device/silicon_creator/lib/drivers/flash_ctrl.h"
 #include "sw/device/silicon_creator/lib/error.h"
 
 #include "flash_ctrl_regs.h"
 
-// RAM copy of the owner INFO pages from flash.
-owner_block_t owner_page[2];
-owner_page_status_t owner_page_valid[2];
-
 enum {
   kFlashBankSize = FLASH_CTRL_PARAM_REG_PAGES_PER_BANK,
-  kFlashPageSize = FLASH_CTRL_PARAM_BYTES_PER_PAGE,
 };
-
-hardened_bool_t owner_block_newversion_mode(void) {
-  if (owner_page_valid[0] == kOwnerPageStatusSealed &&
-      (owner_page[0].update_mode == kOwnershipUpdateModeNewVersion ||
-       owner_page[0].update_mode == kOwnershipUpdateModeSelfVersion)) {
-    return kHardenedBoolTrue;
-  }
-  return kHardenedBoolFalse;
-}
-
-hardened_bool_t owner_block_page1_valid_for_transfer(boot_data_t *bootdata) {
-  if (bootdata->ownership_state == kOwnershipStateLockedOwner &&
-      owner_page_valid[1] == kOwnerPageStatusSealed) {
-    return kHardenedBoolTrue;
-  }
-  if (owner_page_valid[1] == kOwnerPageStatusSigned) {
-    hmac_digest_t digest;
-    switch (bootdata->ownership_state) {
-      case kOwnershipStateUnlockedAny:
-        // In UnlockedAny, any valid (signed) Owner Page 1 is acceptable.
-        return kHardenedBoolTrue;
-      case kOwnershipStateUnlockedSelf:
-        // In UnlockedSelf, the owner key must be the same.  If not,
-        // skip parsing of Owner Page 1.
-        if (hardened_memeq(
-                owner_page[0].owner_key.raw, owner_page[1].owner_key.raw,
-                ARRAYSIZE(owner_page[0].owner_key.raw)) == kHardenedBoolTrue) {
-          return kHardenedBoolTrue;
-        }
-        break;
-      case kOwnershipStateUnlockedEndorsed:
-        // In UnlockedEndorsed, the owner key must match the key endorsed by the
-        // next_owner field in bootdata.  If not, skip parsing owner page 1.
-        hmac_sha256(owner_page[1].owner_key.raw,
-                    sizeof(owner_page[1].owner_key.raw), &digest);
-        if (hardened_memeq(bootdata->next_owner, digest.digest,
-                           ARRAYSIZE(digest.digest)) == kHardenedBoolTrue) {
-          return kHardenedBoolTrue;
-        }
-        break;
-      default:
-          /* nothing */;
-    }
-  }
-  return kHardenedBoolFalse;
-}
 
 void owner_config_default(owner_config_t *config) {
   // Use a bogus pointer value to avoid the all-zeros pattern of NULL.
@@ -82,24 +30,22 @@ void owner_config_default(owner_config_t *config) {
 rom_error_t owner_block_parse(const owner_block_t *block,
                               owner_config_t *config,
                               owner_application_keyring_t *keyring) {
-  owner_config_default(config);
   if (block->header.tag != kTlvTagOwner)
     return kErrorOwnershipInvalidTag;
   if (block->header.length != sizeof(owner_block_t))
     return kErrorOwnershipInvalidTagLength;
-  if (block->header.version.major != 0)
-    return kErrorOwnershipOWNRVersion;
 
+  owner_config_default(config);
   config->sram_exec = block->sram_exec_mode;
 
   uint32_t remain = sizeof(block->data);
   uint32_t offset = 0;
   while (remain) {
     const tlv_header_t *item = (const tlv_header_t *)(block->data + offset);
-    if (item->tag == kTlvTagNotPresent) {
+    if (item->tag == kTlvTagNotPresent || item->length == kTlvTagNotPresent) {
       break;
     }
-    if (item->length < 8 || item->length > remain || item->length % 4 != 0) {
+    if (item->length < 8 || item->length > remain) {
       return kErrorOwnershipInvalidTagLength;
     }
     remain -= item->length;
@@ -108,9 +54,6 @@ rom_error_t owner_block_parse(const owner_block_t *block,
     switch (launder32(item->tag)) {
       case kTlvTagApplicationKey:
         HARDENED_CHECK_EQ(tag, kTlvTagApplicationKey);
-        if (item->version.major != 0)
-          return kErrorOwnershipAPPKVersion;
-
         if (keyring->length < ARRAYSIZE(keyring->key)) {
           keyring->key[keyring->length++] =
               (const owner_application_key_t *)item;
@@ -118,26 +61,18 @@ rom_error_t owner_block_parse(const owner_block_t *block,
         break;
       case kTlvTagFlashConfig:
         HARDENED_CHECK_EQ(tag, kTlvTagFlashConfig);
-        if (item->version.major != 0)
-          return kErrorOwnershipFLSHVersion;
         if ((hardened_bool_t)config->flash != kHardenedBoolFalse)
           return kErrorOwnershipDuplicateItem;
-        HARDENED_RETURN_IF_ERROR(
-            owner_block_flash_check((const owner_flash_config_t *)item));
         config->flash = (const owner_flash_config_t *)item;
         break;
       case kTlvTagInfoConfig:
         HARDENED_CHECK_EQ(tag, kTlvTagInfoConfig);
-        if (item->version.major != 0)
-          return kErrorOwnershipINFOVersion;
         if ((hardened_bool_t)config->info != kHardenedBoolFalse)
           return kErrorOwnershipDuplicateItem;
         config->info = (const owner_flash_info_config_t *)item;
         break;
       case kTlvTagRescueConfig:
         HARDENED_CHECK_EQ(tag, kTlvTagRescueConfig);
-        if (item->version.major != 0)
-          return kErrorOwnershipRESQVersion;
         if ((hardened_bool_t)config->rescue != kHardenedBoolFalse)
           return kErrorOwnershipDuplicateItem;
         config->rescue = (const owner_rescue_config_t *)item;
@@ -149,56 +84,11 @@ rom_error_t owner_block_parse(const owner_block_t *block,
   return kErrorOk;
 }
 
-rom_error_t owner_block_flash_check(const owner_flash_config_t *flash) {
-  size_t len = (flash->header.length - sizeof(owner_flash_config_t)) /
-               sizeof(owner_flash_region_t);
-  if (len >= 8) {
-    return kErrorOwnershipFlashConfigLenth;
-  }
-
-  const uint32_t kRomExtAStart = 0 / kFlashPageSize;
-  const uint32_t kRomExtAEnd = CHIP_ROM_EXT_SIZE_MAX / kFlashPageSize;
-  const uint32_t kRomExtBStart = kFlashBankSize + kRomExtAStart;
-  const uint32_t kRomExtBEnd = kFlashBankSize + kRomExtAEnd;
-
-  const owner_flash_region_t *config = flash->config;
-  uint32_t crypt = 0;
-  for (size_t i = 0; i < len; ++i, ++config, crypt += 0x11111111) {
-    uint32_t start = config->start;
-    uint32_t end = start + config->size;
-    if ((kRomExtAStart >= start && kRomExtAStart < end) ||
-        (kRomExtAEnd > start && kRomExtAEnd <= end) ||
-        (kRomExtBStart >= start && kRomExtBStart < end) ||
-        (kRomExtBEnd > start && kRomExtBEnd <= end)) {
-      uint32_t val = config->properties ^ crypt;
-      flash_ctrl_cfg_t cfg = {
-          .scrambling = bitfield_field32_read(val, FLASH_CONFIG_SCRAMBLE),
-          .ecc = bitfield_field32_read(val, FLASH_CONFIG_ECC),
-          .he = bitfield_field32_read(val, FLASH_CONFIG_HIGH_ENDURANCE),
-      };
-      flash_ctrl_cfg_t dfl = flash_ctrl_data_default_cfg_get();
-      // Any non-true value should be forced to false.
-      if (dfl.ecc != kMultiBitBool4True)
-        dfl.ecc = kMultiBitBool4False;
-      if (dfl.scrambling != kMultiBitBool4True)
-        dfl.scrambling = kMultiBitBool4False;
-
-      if (cfg.ecc != dfl.ecc || cfg.scrambling != dfl.scrambling) {
-        // The config region convering the ROM_EXT needs to match the
-        // default config's ECC and scrambling settings.
-        return kErrorOwnershipFlashConfigRomExt;
-      }
-    }
-  }
-  return kErrorOk;
-}
-
 rom_error_t owner_block_flash_apply(const owner_flash_config_t *flash,
-                                    uint32_t config_side, uint32_t lockdown) {
+                                    uint32_t config_side,
+                                    uint32_t primary_side) {
   if ((hardened_bool_t)flash == kHardenedBoolFalse)
     return kErrorOk;
-  // TODO: Hardening: lockdown should be one of kBootSlotA, kBootSlotB or
-  // kHardenedBoolFalse.
   uint32_t start = config_side == kBootSlotA   ? 0
                    : config_side == kBootSlotB ? kFlashBankSize
                                                : 0xFFFFFFFF;
@@ -228,23 +118,13 @@ rom_error_t owner_block_flash_apply(const owner_flash_config_t *flash,
           .erase = bitfield_field32_read(val, FLASH_CONFIG_ERASE),
       };
 
-      if (lockdown == config_side) {
-        if (bitfield_field32_read(val, FLASH_CONFIG_PROTECT_WHEN_PRIMARY) !=
-            kMultiBitBool4False) {
-          perm.write = kMultiBitBool4False;
-          perm.erase = kMultiBitBool4False;
-        }
+      if (config_side == primary_side &&
+          bitfield_field32_read(val, FLASH_CONFIG_PROTECT_WHEN_PRIMARY) !=
+              kMultiBitBool4False) {
+        perm.write = kMultiBitBool4False;
+        perm.erase = kMultiBitBool4False;
       }
-
-      hardened_bool_t lock = kHardenedBoolFalse;
-      if (lockdown != kHardenedBoolFalse) {
-        if (bitfield_field32_read(val, FLASH_CONFIG_LOCK) !=
-            kMultiBitBool4False) {
-          lock = kHardenedBoolTrue;
-        }
-      }
-      flash_ctrl_data_region_protect(i, config->start, config->size, perm, cfg,
-                                     lock);
+      flash_ctrl_data_region_protect(i, config->start, config->size, perm, cfg);
     }
   }
   return kErrorOk;
@@ -273,14 +153,14 @@ rom_error_t owner_block_info_apply(const owner_flash_info_config_t *info) {
       flash_ctrl_info_page_t page = {
           .base_addr = config->bank * FLASH_CTRL_PARAM_BYTES_PER_BANK +
                        config->page * FLASH_CTRL_PARAM_BYTES_PER_PAGE,
-          .cfg_wen_offset =
+          .cfg_wen_addr =
               config->page * sizeof(uint32_t) +
               (config->bank == 0 ? FLASH_CTRL_BANK0_INFO0_REGWEN_0_REG_OFFSET
                                  : FLASH_CTRL_BANK1_INFO0_REGWEN_0_REG_OFFSET),
-          .cfg_offset = config->page * sizeof(uint32_t) +
-                        (config->bank == 0
-                             ? FLASH_CTRL_BANK0_INFO0_PAGE_CFG_0_REG_OFFSET
-                             : FLASH_CTRL_BANK1_INFO0_PAGE_CFG_0_REG_OFFSET),
+          .cfg_addr = config->page * sizeof(uint32_t) +
+                      (config->bank == 0
+                           ? FLASH_CTRL_BANK0_INFO0_PAGE_CFG_0_REG_OFFSET
+                           : FLASH_CTRL_BANK1_INFO0_PAGE_CFG_0_REG_OFFSET),
       };
 
       uint32_t val = config->properties ^ crypt;
@@ -316,15 +196,6 @@ rom_error_t owner_keyring_find_key(const owner_application_keyring_t *keyring,
   return kErrorOwnershipKeyNotFound;
 }
 
-size_t owner_block_key_page(const owner_application_key_t *key) {
-  // The key pointer must point to a memory address on one of the two owner
-  // pages.
-  HARDENED_CHECK_GT((uintptr_t)key, (uintptr_t)&owner_page[0]);
-  HARDENED_CHECK_LT((uintptr_t)key,
-                    (uintptr_t)&owner_page[ARRAYSIZE(owner_page)]);
-  return (uintptr_t)key < (uintptr_t)&owner_page[1] ? 0 : 1;
-}
-
 hardened_bool_t owner_rescue_command_allowed(
     const owner_rescue_config_t *rescue, uint32_t command) {
   // If no rescue configuration is supplied in the owner config, then all rescue
@@ -340,12 +211,4 @@ hardened_bool_t owner_rescue_command_allowed(
     }
   }
   return allowed;
-}
-
-void owner_block_measurement(size_t page, hmac_digest_t *measurement) {
-  HARDENED_CHECK_LT(page, ARRAYSIZE(owner_page));
-  // Digest of the contents of the owner page, not including the signature or
-  // the seal.
-  size_t len = offsetof(owner_block_t, signature);
-  hmac_sha256(&owner_page[page], len, measurement);
 }

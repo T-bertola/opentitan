@@ -5,16 +5,32 @@
   instance_name: top_darjeeling_rstmgr
   param_values:
   {
-    clk_freqs:
-    {
-      aon: 62500000
-      io_div4: 250000000
-      main: 1000000000
-      io: 1000000000
-      io_div2: 500000000
-    }
+    clks:
+    [
+      aon
+      io_div4
+      main
+      io
+      io_div2
+      usb
+    ]
     reqs:
     {
+      peripheral:
+      [
+        {
+          name: aon_timer_rst_req
+          width: "1"
+          module: aon_timer_aon
+          desc: watchdog reset requestt
+        }
+        {
+          name: rst_req_external
+          width: "1"
+          module: soc_proxy
+          desc: External reset request
+        }
+      ]
       int:
       [
         {
@@ -36,21 +52,6 @@
           module: rv_dm
         }
       ]
-      peripheral:
-      [
-        {
-          name: aon_timer_rst_req
-          width: "1"
-          module: aon_timer_aon
-          desc: watchdog reset request
-        }
-        {
-          name: rst_req_external
-          width: "1"
-          module: soc_proxy
-          desc: External reset request
-        }
-      ]
     }
     power_domains:
     [
@@ -59,11 +60,11 @@
     ]
     num_rstreqs: 2
     sw_rsts:
-    {
-      spi_device: io_div4
-      spi_host0: io_div4
-      i2c0: io_div4
-    }
+    [
+      spi_device
+      spi_host0
+      i2c0
+    ]
     output_rsts:
     [
       {
@@ -137,6 +138,21 @@
         clock: io_div4
       }
       {
+        name: por_usb
+        gen: true
+        type: top
+        domains:
+        [
+          Aon
+          "0"
+        ]
+        shadowed: false
+        sw: false
+        path: rstmgr_aon_resets.rst_por_usb_n
+        parent: por_aon
+        clock: usb
+      }
+      {
         name: lc
         gen: true
         type: top
@@ -207,6 +223,21 @@
         path: rstmgr_aon_resets.rst_lc_io_div4_n
         parent: lc_src
         clock: io_div4
+      }
+      {
+        name: lc_usb
+        gen: true
+        type: top
+        domains:
+        [
+          Aon
+          "0"
+        ]
+        shadowed: false
+        sw: false
+        path: rstmgr_aon_resets.rst_lc_usb_n
+        parent: lc_src
+        clock: usb
       }
       {
         name: sys
@@ -338,6 +369,21 @@
         clock: io_div4
       }
       {
+        name: por_usb
+        gen: true
+        type: top
+        domains:
+        [
+          Aon
+          "0"
+        ]
+        shadowed: false
+        sw: false
+        path: rstmgr_aon_resets.rst_por_usb_n
+        parent: por_aon
+        clock: usb
+      }
+      {
         name: lc
         gen: true
         type: top
@@ -408,6 +454,21 @@
         path: rstmgr_aon_resets.rst_lc_io_div4_n
         parent: lc_src
         clock: io_div4
+      }
+      {
+        name: lc_usb
+        gen: true
+        type: top
+        domains:
+        [
+          Aon
+          "0"
+        ]
+        shadowed: false
+        sw: false
+        path: rstmgr_aon_resets.rst_lc_usb_n
+        parent: lc_src
+        clock: usb
       }
       {
         name: sys
@@ -482,8 +543,6 @@
     ]
     rst_ni: lc_io_div4
     export_rsts: {}
-    with_alert_handler: true
     topname: darjeeling
-    uniquified_modules: {}
   }
 }

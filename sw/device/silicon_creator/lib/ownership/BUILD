@@ -76,11 +76,9 @@ dual_cc_library(
     deps = dual_inputs(
         device = [
             ":ecdsa",
-            "//sw/device/lib/base:memory",
             "//sw/device/lib/base:hardened_memory",
             "//sw/device/silicon_creator/lib/drivers:keymgr",
             "//sw/device/silicon_creator/lib/drivers:kmac",
-            "//sw/device/silicon_creator/lib/drivers:flash_ctrl",
         ],
         host = [
             "//sw/device/lib/base:global_mock",
@@ -90,7 +88,6 @@ dual_cc_library(
         shared = [
             ":datatypes",
             "//sw/device/lib/base:hardened",
-            "//sw/device/silicon_creator/lib/drivers:hmac",
             "//sw/device/silicon_creator/lib:error",
         ],
     ),
@@ -104,13 +101,11 @@ cc_library(
         ":datatypes",
         ":ecdsa",
         ":owner_block",
-        ":ownership_activate",
         ":ownership_key",
         "//sw/device/lib/base:hardened_memory",
         "//sw/device/silicon_creator/lib:boot_data",
         "//sw/device/silicon_creator/lib:dbg_print",
         "//sw/device/silicon_creator/lib/drivers:flash_ctrl",
-        "//sw/device/silicon_creator/lib/drivers:lifecycle",
     ],
 )
 
@@ -122,11 +117,8 @@ cc_library(
         ":datatypes",
         "//sw/device/lib/base:bitfield",
         "//sw/device/lib/base:hardened",
-        "//sw/device/lib/base:hardened_memory",
         "//sw/device/silicon_creator/lib:boot_data",
-        "//sw/device/silicon_creator/lib/base:chip",
         "//sw/device/silicon_creator/lib/drivers:flash_ctrl",
-        "//sw/device/silicon_creator/lib/drivers:hmac",
     ],
 )
 
@@ -153,7 +145,7 @@ cc_library(
     hdrs = ["ownership_unlock.h"],
     deps = [
         ":datatypes",
-        ":owner_block",
+        ":ownership",
         ":ownership_key",
         "//sw/device/lib/base:memory",
         "//sw/device/silicon_creator/lib:boot_data",
@@ -161,7 +153,6 @@ cc_library(
         "//sw/device/silicon_creator/lib/boot_svc:boot_svc_msg",
         "//sw/device/silicon_creator/lib/drivers:flash_ctrl",
         "//sw/device/silicon_creator/lib/drivers:hmac",
-        "//sw/device/silicon_creator/lib/drivers:lifecycle",
     ],
 )
 
@@ -177,7 +168,6 @@ cc_test(
         "//sw/device/lib/base:hardened",
         "//sw/device/silicon_creator/lib:boot_data",
         "//sw/device/silicon_creator/lib/boot_svc:boot_svc_header",
-        "//sw/device/silicon_creator/lib/drivers:lifecycle",
         "//sw/device/silicon_creator/testing:rom_test",
         "@googletest//:gtest_main",
     ],
@@ -189,14 +179,13 @@ cc_library(
     hdrs = ["ownership_activate.h"],
     deps = [
         ":datatypes",
-        ":owner_block",
+        ":ownership",
         ":ownership_key",
         "//sw/device/lib/base:memory",
         "//sw/device/silicon_creator/lib:boot_data",
         "//sw/device/silicon_creator/lib:error",
         "//sw/device/silicon_creator/lib/boot_svc:boot_svc_msg",
         "//sw/device/silicon_creator/lib/drivers:flash_ctrl",
-        "//sw/device/silicon_creator/lib/drivers:lifecycle",
     ],
 )
 
@@ -221,24 +210,6 @@ cc_library(
     name = "test_owner",
     testonly = True,
     srcs = ["test_owner.c"],
-    deps = [
-        ":datatypes",
-        ":owner_block",
-        ":ownership",
-        "//sw/device/silicon_creator/lib:boot_data",
-        "//sw/device/silicon_creator/lib/drivers:flash_ctrl",
-        "//sw/device/silicon_creator/lib/ownership/keys/fake:includes",
-    ],
-    alwayslink = True,
-)
-
-cc_library(
-    name = "test_owner_update_mode_newversion",
-    testonly = True,
-    srcs = ["test_owner.c"],
-    defines = [
-        "TEST_OWNER_UPDATE_MODE=kOwnershipUpdateModeNewVersion",
-    ],
     deps = [
         ":datatypes",
         ":owner_block",

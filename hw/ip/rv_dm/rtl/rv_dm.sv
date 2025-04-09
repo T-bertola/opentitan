@@ -15,11 +15,10 @@
 module rv_dm
   import rv_dm_reg_pkg::*;
 #(
-  parameter logic [NumAlerts-1:0]           AlertAsyncOn           = {NumAlerts{1'b1}},
-  parameter logic [31:0]                    IdcodeValue            = 32'h 0000_0001,
-  parameter bit                             UseDmiInterface        = 1'b0,
-  parameter bit                             SecVolatileRawUnlockEn = 0,
-  parameter logic [tlul_pkg::RsvdWidth-1:0] TlulHostUserRsvdBits   = 0
+  parameter logic [NumAlerts-1:0] AlertAsyncOn           = {NumAlerts{1'b1}},
+  parameter logic [31:0]          IdcodeValue            = 32'h 0000_0001,
+  parameter bit                   UseDmiInterface        = 1'b0,
+  parameter bit                   SecVolatileRawUnlockEn = 0
 ) (
   input  logic                clk_i,       // clock
   input  logic                clk_lc_i,    // only declared here so that the topgen
@@ -387,7 +386,7 @@ module rv_dm
     .wdata_i      (host_wdata),
     .wdata_intg_i ('0),
     .be_i         (host_be),
-    .user_rsvd_i  (TlulHostUserRsvdBits),
+    .user_rsvd_i  ('0),
     .valid_o      (host_r_valid),
     .rdata_o      (host_r_rdata),
     .rdata_intg_o (),
@@ -712,7 +711,7 @@ module rv_dm
   if (UseDmiInterface) begin : gen_dmi_assertions
     `ASSERT(DmiRspOneCycleAfterReq_A, dmi_req_valid |=> dmi_rsp_valid)
     `ASSERT_PRIM_FSM_ERROR_TRIGGER_ALERT(DbgTlLcGateFsm_A,
-      gen_dmi_gating.u_rv_dm_dmi_gate.u_tlul_lc_gate_dbg.u_state_regs, alert_tx_o[0])
+      u_rv_dm_dmi_gate.u_tlul_lc_gate_dbg, alert_tx_o[0])
   end else begin : gen_jtag_assertions
     // JTAG TDO is driven by an inverted TCK in dmi_jtag_tap.sv
     `ASSERT_KNOWN(JtagRspOTdoKnown_A, jtag_o.tdo, !jtag_i.tck, !jtag_i.trst_n)

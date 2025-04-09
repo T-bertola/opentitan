@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use crate::commands::{BasicResult, Dispatch};
 use crate::error::HsmError;
 use crate::module::Module;
+use crate::util::helper;
 use crate::util::signing::SignData;
 
 #[derive(clap::Args, Debug, Serialize, Deserialize)]
@@ -42,15 +43,15 @@ impl Dispatch for Sign {
         hsm: &Module,
         _session: Option<&Session>,
     ) -> Result<Box<dyn Annotate>> {
-        let spx = hsm.spx.as_ref().ok_or(HsmError::SpxUnavailable)?;
+        let acorn = hsm.acorn.as_ref().ok_or(HsmError::AcornUnavailable)?;
         let _token = hsm.token.as_deref().ok_or(HsmError::SessionRequired)?;
 
-        let data = std::fs::read(&self.input)?;
+        let data = helper::read_file(&self.input)?;
         let data = self
             .format
             .spx_prepare(self.domain, &data, self.little_endian)?;
-        let result = spx.sign(self.label.as_deref(), self.id.as_deref(), &data)?;
-        std::fs::write(&self.output, &result)?;
+        let result = acorn.sign(self.label.as_deref(), self.id.as_deref(), &data)?;
+        helper::write_file(&self.output, &result)?;
         Ok(Box::<BasicResult>::default())
     }
 }

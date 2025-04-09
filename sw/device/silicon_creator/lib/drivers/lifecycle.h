@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 
-#include "sw/device/lib/base/hardened.h"
 #include "sw/device/lib/base/macros.h"
 
 #ifdef __cplusplus
@@ -94,16 +93,6 @@ OT_WARN_UNUSED_RESULT
 lifecycle_state_t lifecycle_state_get(void);
 
 /**
- * Check if the device is in prod state.
- *
- * Warning: This function also returns false when LCS is invalid.
- *
- * @return `kHardenedBoolTrue` if the device is in prod state.
- */
-OT_WARN_UNUSED_RESULT
-hardened_bool_t lifecycle_is_prod(void);
-
-/**
  * Get the unprocessed life cycle state value read from the hardware.
  *
  * This function directly returns the `uint32_t` value read from the hardware.
@@ -127,14 +116,6 @@ void lifecycle_device_id_get(lifecycle_device_id_t *device_id);
  * @param[out] hw_rev Hardware revision.
  */
 void lifecycle_hw_rev_get(lifecycle_hw_rev_t *hw_rev);
-
-/**
- * Determine if the device identification number subfield of the Device Id is
- * equal to the supplied DIN.
- *
- * @returns kHardenedBoolTrue if equal, kHardenedBoolFalse if not equal.
- */
-hardened_bool_t lifecycle_din_eq(lifecycle_device_id_t *id, uint32_t *din);
 
 #ifdef __cplusplus
 }

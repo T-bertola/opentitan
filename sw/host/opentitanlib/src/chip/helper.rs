@@ -17,8 +17,6 @@ pub struct OwnershipUnlockParams {
     pub mode: Option<UnlockMode>,
     #[arg(long, value_parser = u64::from_str, help="Current ROM_EXT nonce")]
     pub nonce: Option<u64>,
-    #[arg(long, value_parser = u64::from_str, help="Device Identification Number of the chip")]
-    pub din: Option<u64>,
     #[arg(long, help = "A path to the next owner key (for endorsed mode)")]
     pub next_owner: Option<PathBuf>,
     #[arg(long, help = "A path to a detached signature for the unlock request")]
@@ -35,9 +33,6 @@ impl OwnershipUnlockParams {
         }
         if let Some(nonce) = &self.nonce {
             unlock.nonce = *nonce;
-        }
-        if let Some(din) = &self.din {
-            unlock.din = *din;
         }
         if let Some(next_owner) = &self.next_owner {
             let key = EcdsaPublicKey::load(next_owner)?;
@@ -72,8 +67,6 @@ impl OwnershipUnlockParams {
 pub struct OwnershipActivateParams {
     #[arg(long, value_parser = u64::from_str, help="Current ROM_EXT nonce")]
     pub nonce: Option<u64>,
-    #[arg(long, value_parser = u64::from_str, help="Device Identification Number of the chip")]
-    pub din: Option<u64>,
     #[arg(long, help = "A path to a detached signature for the activate request")]
     pub signature: Option<PathBuf>,
     #[arg(long, help = "A path to a private key to sign the request")]
@@ -85,9 +78,6 @@ impl OwnershipActivateParams {
     pub fn apply(&self, activate: &mut OwnershipActivateRequest) -> Result<()> {
         if let Some(nonce) = &self.nonce {
             activate.nonce = *nonce;
-        }
-        if let Some(din) = &self.din {
-            activate.din = *din;
         }
         if let Some(signature) = &self.signature {
             let mut f = File::open(signature)?;

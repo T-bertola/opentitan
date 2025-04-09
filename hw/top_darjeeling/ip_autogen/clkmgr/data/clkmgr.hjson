@@ -36,6 +36,7 @@
     {reset: "rst_root_ni"},
     {clock: "clk_main_i", reset: "rst_main_ni"},
     {clock: "clk_io_i", reset: "rst_io_ni"},
+    {clock: "clk_usb_i", reset: "rst_usb_ni"},
     {clock: "clk_aon_i", reset: "rst_aon_ni"},
     {clock: "clk_io_div2_i", reset: "rst_io_div2_ni", internal: true},
     {clock: "clk_io_div4_i", reset: "rst_io_div4_ni", internal: true},
@@ -43,6 +44,7 @@
     {reset: "rst_root_io_ni"},
     {reset: "rst_root_io_div2_ni"},
     {reset: "rst_root_io_div4_ni"},
+    {reset: "rst_root_usb_ni"},
   ]
   bus_interfaces: [
     { protocol: "tlul", direction: "device" }
@@ -70,7 +72,7 @@
     { name: "NumSwGateableClocks",
       desc: "Number of SW gateable clocks",
       type: "int",
-      default: "2",
+      default: "3",
       local: "true"
     },
     { name: "NumHintableClocks",
@@ -87,6 +89,9 @@
     }
     { name: "CLKMGR.ENABLE.IO_DIV2",
       desc: "Gating of IO_DIV2 peripheral clock."
+    }
+    { name: "CLKMGR.ENABLE.USB",
+      desc: "Gating of USB peripheral clock."
     }
     { name: "CLKMGR.HINT.AES",
       desc: "Gating of AES transactional clock."
@@ -110,6 +115,9 @@
     }
     { name: "CLKMGR.MEAS_CTRL.MAIN",
       desc: "Frequency and timeout measurements of MAIN clock."
+    }
+    { name: "CLKMGR.MEAS_CTRL.USB",
+      desc: "Frequency and timeout measurements of USB clock."
     }
     { name: "CLKMGR.MEAS_CTRL.RECOV_ERR",
       desc: "Frequency and timeout measurements can flag recoverable errors."
@@ -410,7 +418,6 @@
       ''',
       swaccess: "rw",
       hwaccess: "hro",
-      regwen: "JITTER_REGWEN"
       fields: [
         {
           mubi: true,
@@ -453,6 +460,15 @@
           desc: '''
             0 CLK_IO_DIV2_PERI is disabled.
             1 CLK_IO_DIV2_PERI is enabled.
+          '''
+        }
+        {
+          bits: "2",
+          name: "CLK_USB_PERI_EN",
+          resval: 1,
+          desc: '''
+            0 CLK_USB_PERI is disabled.
+            1 CLK_USB_PERI is enabled.
           '''
         }
       ]
@@ -628,17 +644,17 @@
       storage_err_alert: "fatal_fault",
       fields: [
         {
-          bits: "3:0",
+          bits: "7:0",
           name: "HI",
           desc: "Max threshold for io_div4 measurement",
-          resval: "14"
+          resval: "130"
         },
 
         {
-          bits: "7:4",
+          bits: "15:8",
           name: "LO",
           desc: "Min threshold for io_div4 measurement",
-          resval: "0"
+          resval: "110"
         },
       ]
     },
@@ -682,17 +698,71 @@
       storage_err_alert: "fatal_fault",
       fields: [
         {
-          bits: "5:0",
+          bits: "9:0",
           name: "HI",
           desc: "Max threshold for main measurement",
-          resval: "26"
+          resval: "510"
         },
 
         {
-          bits: "11:6",
+          bits: "19:10",
           name: "LO",
           desc: "Min threshold for main measurement",
-          resval: "6"
+          resval: "490"
+        },
+      ]
+    },
+    { name: "USB_MEAS_CTRL_EN",
+      desc: '''
+        Enable for measurement control
+      ''',
+      regwen: "MEASURE_CTRL_REGWEN",
+      swaccess: "rw",
+      hwaccess: "hrw",
+      async: "clk_usb_i",
+      fields: [
+        {
+          bits: "3:0",
+          name: "EN",
+          desc: "Enable measurement for usb",
+          mubi: true,
+          resval: false,
+        },
+      ]
+      // Measurements can cause recoverable errors depending on the
+      // thresholds which randomized CSR tests will not predict correctly.
+      // To provide better CSR coverage we allow writing the threshold
+      // fields, but not enabling the counters.
+      tags: ["excl:CsrAllTests:CsrExclWrite"]
+    },
+
+    { name: "USB_MEAS_CTRL_SHADOWED",
+      desc: '''
+        Configuration controls for usb measurement.
+
+        The threshold fields are made wider than required (by 1 bit) to ensure
+        there is room to adjust for measurement inaccuracies.
+      ''',
+      regwen: "MEASURE_CTRL_REGWEN",
+      swaccess: "rw",
+      hwaccess: "hro",
+      async: "clk_usb_i",
+      shadowed: "true",
+      update_err_alert: "recov_fault",
+      storage_err_alert: "fatal_fault",
+      fields: [
+        {
+          bits: "8:0",
+          name: "HI",
+          desc: "Max threshold for usb measurement",
+          resval: "250"
+        },
+
+        {
+          bits: "17:9",
+          name: "LO",
+          desc: "Min threshold for usb measurement",
+          resval: "230"
         },
       ]
     },
@@ -727,6 +797,14 @@
         },
         {
           bits: "3",
+          name: "USB_MEASURE_ERR",
+          resval: 0,
+          desc: '''
+            usb has encountered a measurement error.
+          '''
+        },
+        {
+          bits: "4",
           name: "IO_DIV4_TIMEOUT_ERR",
           resval: 0,
           desc: '''
@@ -734,11 +812,19 @@
           '''
         }
         {
-          bits: "4",
+          bits: "5",
           name: "MAIN_TIMEOUT_ERR",
           resval: 0,
           desc: '''
             main has timed out.
+          '''
+        }
+        {
+          bits: "6",
+          name: "USB_TIMEOUT_ERR",
+          resval: 0,
+          desc: '''
+            usb has timed out.
           '''
         }
       ]

@@ -9,7 +9,7 @@ import topgen.lib as lib
 from reggen.params import Parameter
 from topgen.clocks import Clocks
 from topgen.resets import Resets
-from topgen.merge import is_unmanaged_reset, get_alerts_with_unique_lpg_idx
+from topgen.merge import is_unmanaged_reset
 
 num_mio_inputs = top['pinmux']['io_counts']['muxed']['inouts'] + \
                  top['pinmux']['io_counts']['muxed']['inputs']
@@ -151,14 +151,6 @@ module top_${top["name"]} #(
   output prim_mubi_pkg::mubi4_t     [top_${top["name"]}_pkg::NOutgoingLpgs${alert_group.capitalize()}-1:0]   outgoing_lpg_cg_en_${alert_group}_o,
   output prim_mubi_pkg::mubi4_t     [top_${top["name"]}_pkg::NOutgoingLpgs${alert_group.capitalize()}-1:0]   outgoing_lpg_rst_en_${alert_group}_o,
   % endfor
-  % for alert_group in top['incoming_alert'].keys():
-  
-  // Incoming alerts for group ${alert_group}
-  input  prim_alert_pkg::alert_tx_t [top_${top["name"]}_pkg::NIncomingAlerts${alert_group.capitalize()}-1:0] incoming_alert_${alert_group}_tx_i,
-  output prim_alert_pkg::alert_rx_t [top_${top["name"]}_pkg::NIncomingAlerts${alert_group.capitalize()}-1:0] incoming_alert_${alert_group}_rx_o,
-  input  prim_mubi_pkg::mubi4_t     [top_${top["name"]}_pkg::NIncomingLpgs${alert_group.capitalize()}-1:0]   incoming_lpg_cg_en_${alert_group}_i,
-  input  prim_mubi_pkg::mubi4_t     [top_${top["name"]}_pkg::NIncomingLpgs${alert_group.capitalize()}-1:0]   incoming_lpg_rst_en_${alert_group}_i,
-  % endfor
 
   // All clocks forwarded to ast
   output clkmgr_pkg::clkmgr_out_t clks_ast_o,
@@ -175,7 +167,6 @@ module top_${top["name"]} #(
   import top_${top["name"]}_pkg::*;
   // Compile-time random constants
   import top_${top["name"]}_rnd_cnst_pkg::*;
-  import top_${top["name"]}_racl_pkg::*;
 
   // Local Parameters
 % for m in top["module"]:
@@ -255,11 +246,11 @@ module top_${top["name"]} #(
 % endfor
 
   // Alert list
-  prim_alert_pkg::alert_tx_t [alert_handler_pkg::NAlerts-1:0]  alert_tx;
-  prim_alert_pkg::alert_rx_t [alert_handler_pkg::NAlerts-1:0]  alert_rx;
+  prim_alert_pkg::alert_tx_t [alert_pkg::NAlerts-1:0]  alert_tx;
+  prim_alert_pkg::alert_rx_t [alert_pkg::NAlerts-1:0]  alert_rx;
 
 % if not top["alert"]:
-  for (genvar k = 0; k < alert_handler_pkg::NAlerts; k++) begin : gen_alert_tie_off
+  for (genvar k = 0; k < alert_pkg::NAlerts; k++) begin : gen_alert_tie_off
     // tie off if no alerts present in the system
     assign alert_tx[k].alert_p = 1'b0;
     assign alert_tx[k].alert_n = 1'b1;
@@ -330,7 +321,7 @@ module top_${top["name"]} #(
 ## Inter-module signal collection
 
 % for m in top["module"]:
-  % if m.get("template_type") == "otp_ctrl":
+  % if m["type"] == "otp_ctrl":
   // OTP HW_CFG Broadcast signals.
   // TODO(#6713): The actual struct breakout and mapping currently needs to
   // be performed by hand.
@@ -338,8 +329,6 @@ module top_${top["name"]} #(
       otp_ctrl_otp_broadcast.hw_cfg1_data.en_sram_ifetch;
   assign lc_ctrl_otp_device_id =
       otp_ctrl_otp_broadcast.hw_cfg0_data.device_id;
-  assign soc_dbg_ctrl_soc_dbg_state =
-      otp_ctrl_otp_broadcast.hw_cfg1_data.soc_dbg_state;
   assign lc_ctrl_otp_manuf_state =
       otp_ctrl_otp_broadcast.hw_cfg0_data.manuf_state;
   % for mod in top["module"]:
@@ -370,9 +359,6 @@ module top_${top["name"]} #(
   assign rv_core_ibex_irq_timer = intr_rv_timer_timer_expired_hart0_timer0;
   assign rv_core_ibex_hart_id = '0;
 
-  // Unconditionally disable the late debug feature and enable early debug
-  assign rv_dm_otp_dis_rv_dm_late_debug = prim_mubi_pkg::MuBi8True;
-
   ## Not all top levels have a rom controller.
   ## For those that do not, reference the ROM directly.
 <% num_rom_ctrl = lib.num_rom_ctrl(top["module"]) %>\
@@ -384,8 +370,8 @@ module top_${top["name"]} #(
 % endif
 
   // Wire up alert handler LPGs
-  prim_mubi_pkg::mubi4_t [alert_handler_pkg::NLpg-1:0] lpg_cg_en;
-  prim_mubi_pkg::mubi4_t [alert_handler_pkg::NLpg-1:0] lpg_rst_en;
+  prim_mubi_pkg::mubi4_t [alert_pkg::NLpg-1:0] lpg_cg_en;
+  prim_mubi_pkg::mubi4_t [alert_pkg::NLpg-1:0] lpg_rst_en;
 
 <%
 # get all known typed clocks and add them to a dict
@@ -426,13 +412,6 @@ for rst in output_rsts:
 %>\
   assign lpg_cg_en[${k}] = ${cg_en};
   assign lpg_rst_en[${k}] = ${rst_en};
-% endfor
-% for alert_group, alerts in top['incoming_alert'].items():
-  % for unique_alert_lpg_entry in get_alerts_with_unique_lpg_idx(alerts):
-<% k += 1 %>\
-  assign lpg_cg_en[${k}] = incoming_lpg_cg_en_${alert_group}_i[${unique_alert_lpg_entry["lpg_idx"]}];
-  assign lpg_rst_en[${k}] = incoming_lpg_rst_en_${alert_group}_i[${unique_alert_lpg_entry["lpg_idx"]}];
-  % endfor
 % endfor
 
 % for alert_group, lpgs in top['outgoing_alert_lpgs'].items():
@@ -489,7 +468,6 @@ max_intrwidth = (max(len(x.name) for x in block.interrupts)
 %>\
   % if m["param_list"] or block.alerts:
   ${m["type"]} #(
-<%include file="/toplevel_racl.tpl" args="m=m,top=top"/>\
   % if block.alerts:
 <%
 w = len(block.alerts)
@@ -569,10 +547,10 @@ slice = f"{lo+w-1}:{lo}"
         % endif
       % endfor
     % endif
-    % if m.get("template_type") == "rv_plic":
+    % if m["type"] == "rv_plic":
       .intr_src_i (intr_vector),
     % endif
-    % if m.get("template_type") == "pinmux":
+    % if m["type"] == "pinmux":
 
       .periph_to_mio_i      (mio_d2p    ),
       .periph_to_mio_oe_i   (mio_en_d2p ),
@@ -593,7 +571,7 @@ slice = f"{lo+w-1}:{lo}"
       .dio_in_i,
 
     % endif
-    % if m.get("template_type") == "alert_handler":
+    % if m["type"] == "alert_handler":
       // alert signals
       .alert_rx_o  ( alert_rx ),
       .alert_tx_i  ( alert_tx ),
@@ -630,20 +608,6 @@ slice = f"{lo+w-1}:{lo}"
     % endfor
   );
 % endfor
-
-% for alert_group, alerts in top['incoming_alert'].items():
-<%
-w = len(alerts)
-slice = str(alert_idx+w-1) + ":" + str(alert_idx)
-%>
-  // Alert mapping to the alert handler for alert group ${alert_group}
-  % for alert in alerts:
-  // [${alert_idx}]: ${alert['name']}<% alert_idx += 1 %>
-  % endfor
-  assign alert_tx[${slice}] = incoming_alert_${alert_group}_tx_i;
-  assign incoming_alert_${alert_group}_rx_o = alert_rx[${slice}];
-% endfor
-
   // interrupt assignments
 <% base = interrupt_num %>\
   assign intr_vector = {
@@ -754,10 +718,5 @@ slice = str(alert_idx+w-1) + ":" + str(alert_idx)
 
   // make sure scanmode_i is never X (including during reset)
   `ASSERT_KNOWN(scanmodeKnown, scanmode_i, clk_main_i, 0)
-
-  // TODO(#26288) : EnCsrngSwAppReadSize should not be present in Darjeeling; presently, this signal
-  // must be used to avoid a lint error.
-  logic unused_en_csrng;
-  assign unused_en_csrng = ^otp_ctrl_otp_broadcast.hw_cfg1_data.en_csrng_sw_app_read;
 
 endmodule

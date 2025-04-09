@@ -54,7 +54,7 @@ module prim_ram_1r1w_async_adv import prim_ram_2p_pkg::*; #(
 
   // config
   input  ram_2p_cfg_t      cfg_i,
-  output ram_2p_cfg_rsp_t  cfg_rsp_o
+  output ram_2p_cfg_t      cfg_rsp_o
 );
 
 
@@ -92,6 +92,7 @@ module prim_ram_1r1w_async_adv import prim_ram_2p_pkg::*; #(
   logic [Width-1:0]        b_rdata_q,  b_rdata_d ;
   logic [TotalWidth-1:0]   b_rdata_sram ;
   logic [1:0]              b_rerror_q, b_rerror_d ;
+  prim_ram_1p_pkg::ram_1p_cfg_rsp_t cfg_rsp;
 
   prim_ram_1r1w #(
     .MemInitFile     (MemInitFile),
@@ -102,8 +103,6 @@ module prim_ram_1r1w_async_adv import prim_ram_2p_pkg::*; #(
   ) u_mem (
     .clk_a_i    (clk_a_i),
     .clk_b_i    (clk_b_i),
-    .rst_a_ni   (rst_a_ni),
-    .rst_b_ni   (rst_b_ni),
 
     .a_req_i    (a_req_q),
     .a_addr_i   (a_addr_q),
@@ -115,8 +114,11 @@ module prim_ram_1r1w_async_adv import prim_ram_2p_pkg::*; #(
     .b_rdata_o  (b_rdata_sram),
 
     .cfg_i,
-    .cfg_rsp_o
+    .cfg_rsp_o  (cfg_rsp)
   );
+
+  // DFT responeses need to match between prim_ram_1p and prim_ram_2p
+  assign cfg_rsp_o = ram_2p_cfg_rsp_t'(cfg_rsp);
 
   always_ff @(posedge clk_b_i or negedge rst_b_ni) begin
     if (!rst_b_ni) begin

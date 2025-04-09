@@ -492,14 +492,6 @@ module pinmux
     assign mio_to_periph_o[k] = mio_mux[reg2hw.mio_periph_insel[k].q];
   end
 
-% if n_dio_pads > n_mio_pads + 2:
-  // For configurations with NMioPads + 2 < NDioPads, mio_in is zero-extended to NDioPads bits for
-  // convenience. However, mio_periph_insel is sized to select the lowest NMioPads + 2 bits. Most
-  // of the zero bits cannot actually be selected. Tie them off to avoid lint warnings.
-  logic unused_mio_mux;
-  assign unused_mio_mux = ^{mio_mux[(AlignedMuxSize - 1):(NMioPads + 2)]};
-
-% endif
   //////////////////////
   // MIO Output Muxes //
   //////////////////////
@@ -663,7 +655,6 @@ module pinmux
 
   `ASSERT_KNOWN(MioKnownO_A, mio_attr_o)
   `ASSERT_KNOWN(DioKnownO_A, dio_attr_o)
-% if enable_strap_sampling:
 
   `ASSERT_KNOWN(LcJtagTckKnown_A, lc_jtag_o.tck)
   `ASSERT_KNOWN(LcJtagTrstKnown_A, lc_jtag_o.trst_n)
@@ -678,7 +669,6 @@ module pinmux
   `ASSERT_KNOWN(DftJtagTmsKnown_A, dft_jtag_o.tms)
 
   `ASSERT_KNOWN(DftStrapsKnown_A, dft_strap_test_o)
-% endif
 
   // running on slow AON clock
   `ASSERT_KNOWN(AonWkupReqKnownO_A, pin_wkup_req_o, clk_aon_i, !rst_aon_ni)

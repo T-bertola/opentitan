@@ -26,19 +26,12 @@ otp_json(
             },
             lock = True,
         ),
-        otp_partition(
-            name = "HW_CFG0",
-            items = {
-                "DEVICE_ID": "0000000011111111222222223333333344444444555555556666666600010001",
-            },
-            lock = True,
-        ),
     ],
 )
 
 otp_image(
     name = "otp_img_secret2_locked_rma",
-    src = "//hw/top_earlgrey/data/otp:otp_json_rma",
+    src = "//hw/ip/otp_ctrl/data:otp_json_rma",
     overlays = STD_OTP_OVERLAYS + [
         ":otp_json_secret2_locked",
     ],

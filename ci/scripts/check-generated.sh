@@ -67,6 +67,7 @@ fi
 destructive_cleanup
 
 gen_hw_and_check_clean "Register headers" regs             || bad=1
+gen_hw_and_check_clean "OTP memory map"   otp-mmap         || bad=1
 gen_hw_and_check_clean "LC state"         lc-state-enc     || bad=1
 
 # This runs both top and cmdgen targets together since for ipgen
@@ -75,8 +76,16 @@ gen_hw_and_check_clean "LC state"         lc-state-enc     || bad=1
 gen_hw_and_check_clean "top and cmdgen"   top_and_cmdgen   || bad=1
 
 gen_and_check_clean \
+    "python-requirements.txt" \
+    util/sh/scripts/gen-python-requirements.sh || bad=1
+
+gen_and_check_clean \
     "secded primitive code" \
     util/design/secded_gen.py --no_fpv || bad=1
+
+gen_and_check_clean \
+    "DIFs" \
+    util/make_new_dif.py --mode=regen --only=autogen || bad=1
 
 gen_and_check_clean "MUBI package" util/design/gen-mubi.py || bad=1
 

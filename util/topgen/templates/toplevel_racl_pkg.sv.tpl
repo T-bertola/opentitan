@@ -2,47 +2,81 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 ${gencmd}
-<% import textwrap %>\
 
-package top_${topcfg["name"]}_racl_pkg;
-  import top_racl_pkg::*;
+package top_racl_pkg;
+  // Number of RACL policies used
+  parameter int unsigned NrRaclPolicies = ${racl_config['nr_policies']};
 
-<% import raclgen.lib as raclgen %>\
-<% import math %>\
-% if 'racl' in topcfg:
+  // Number of RACL bits transferred
+  parameter int unsigned NrRaclBits = 4;
+
+  // Number of CTN UID bits transferred
+  parameter int unsigned NrCtnUidBits = 8;
+
+  // RACL role type binary encoded
+  typedef logic [NrRaclBits-1:0] racl_role_t;
+
+  // CTN UID assigned the bus originator
+  typedef logic [NrCtnUidBits-1:0] ctn_uid_t;
+
+  // RACL permission: A one-hot encoded role vector
+  typedef logic [(2**NrRaclBits)-1:0] racl_role_vec_t;
+
+  // RACL policy containing a read and write permission
+  typedef struct packed {
+    racl_role_vec_t read_perm;
+    racl_role_vec_t write_perm;
+  } racl_policy_t;
+
+  // RACL policy vector for distributing RACL policies from the RACL widget to the subscribing IP
+  typedef racl_policy_t [NrRaclPolicies-1:0] racl_policy_vec_t;
+
+  // RACL information logged in case of a denial
+  typedef struct packed {
+    racl_role_t racl_role;
+    ctn_uid_t   ctn_uid;
+    // 0: Write access, 1: Read access
+    logic       read_not_write;
+  } racl_error_log_t;
+
+  // Extract RACL role bits from the TLUL reserved user bits
+  function automatic racl_role_t tlul_extract_racl_role_bits(logic [tlul_pkg::RsvdWidth-1:0] rsvd);
+    // Waive unused bits
+    logic unused_rsvd_bits;
+    unused_rsvd_bits = ^{rsvd};
+
+    return racl_role_t'(rsvd[11:8]);
+  endfunction
+
+  // Extract CTN UID bits from the TLUL reserved user bits
+  function automatic ctn_uid_t tlul_extract_ctn_uid_bits(logic [tlul_pkg::RsvdWidth-1:0] rsvd);
+    // Waive unused bits
+    logic unused_rsvd_bits;
+    unused_rsvd_bits = ^{rsvd};
+
+    return ctn_uid_t'(rsvd[7:0]);
+  endfunction
+
+% for racl_group, policies in racl_config['policies'].items():
+<% prefix = "" if len(racl_config['policies'].keys()) == 1 else f"{racl_group.upper()}_" %>\
   /**
-   * RACL groups and policies:
-% for racl_group in racl_config['policies']:
-   *   ${racl_group}
-<%
-    policy_names = [policy['name'] for policy in racl_config['policies'][racl_group]]
-    policy_name_len = max( (len(name) for name in policy_names) )
-    policy_idx_len = math.ceil(math.log10(max(1,len(policy_names)+1)))
-%>\
-  % for policy_idx, policy_name in enumerate(policy_names):
-   *     ${f"{policy_idx}".rjust(policy_idx_len)}: ${policy_name}
-  % endfor
-% endfor
+   * Policies for group ${racl_group}
    */
 
-% endif
-% for m in topcfg['module']:
-  % for if_name, mapping in m.get('racl_mappings', {}).items():
-<%
-      racl_group = mapping['racl_group']
-      policy_names = [policy['name'] for policy in racl_config['policies'][racl_group]]
-      racl_tpl_args = {
-        "register_mapping" : mapping.get('register_mapping', {}),
-        "window_mapping"   : mapping.get('window_mapping', {}),
-        "range_mapping"    : mapping.get('range_mapping', []),
-        "policy_names"     : policy_names,
-        "racl_group"       : racl_group,
-        "module_name"      : m['name'],
-        "if_name"          : if_name
-      }
-%>\
-<%include file="toplevel_racl_pkg_parameters.tpl" args="**racl_tpl_args"/>\
+  % for policy in policies:
+  /*
+   * Policy ${policy['name']} allowed READ roles:
+   *   ${', '.join(policy['allowed_wr'])}
+   */
+  parameter racl_policy_t RACL_POLICY_${prefix}${policy['name'].upper()}_RD_DEFAULT = 16'h${f"{policy['rd_default']:x}"};
+
+  /**
+   * Policy ${policy['name']} allowed WRITE roles:
+   *   ${', '.join(policy['allowed_wr'])}
+   */
+  parameter racl_policy_t RACL_POLICY_${prefix}${policy['name'].upper()}_WR_DEFAULT = 16'h${f"{policy['wr_default']:x}"};
 
   % endfor
 % endfor
+
 endpackage

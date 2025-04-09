@@ -24,6 +24,8 @@
 
 // Include guard for assembler
 #ifdef __ASSEMBLER__
+
+
 /**
  * Memory base for soc_proxy_ctn in top darjeeling.
  */
@@ -119,7 +121,7 @@
  * address between #TOP_DARJEELING_GPIO_BASE_ADDR and
  * `TOP_DARJEELING_GPIO_BASE_ADDR + TOP_DARJEELING_GPIO_SIZE_BYTES`.
  */
-#define TOP_DARJEELING_GPIO_SIZE_BYTES 0x100
+#define TOP_DARJEELING_GPIO_SIZE_BYTES 0x80
 /**
  * Peripheral base address for spi_device in top darjeeling.
  *
@@ -187,14 +189,14 @@
  * address between #TOP_DARJEELING_OTP_CTRL_CORE_BASE_ADDR and
  * `TOP_DARJEELING_OTP_CTRL_CORE_BASE_ADDR + TOP_DARJEELING_OTP_CTRL_CORE_SIZE_BYTES`.
  */
-#define TOP_DARJEELING_OTP_CTRL_CORE_SIZE_BYTES 0x8000
+#define TOP_DARJEELING_OTP_CTRL_CORE_SIZE_BYTES 0x1000
 /**
  * Peripheral base address for prim device on otp_ctrl in top darjeeling.
  *
  * This should be used with #mmio_region_from_addr to access the memory-mapped
  * registers associated with the peripheral (usually via a DIF).
  */
-#define TOP_DARJEELING_OTP_CTRL_PRIM_BASE_ADDR 0x30140000
+#define TOP_DARJEELING_OTP_CTRL_PRIM_BASE_ADDR 0x30138000
 
 /**
  * Peripheral size for prim device on otp_ctrl in top darjeeling.
@@ -211,7 +213,7 @@
  * This should be used with #mmio_region_from_addr to access the memory-mapped
  * registers associated with the peripheral (usually via a DIF).
  */
-#define TOP_DARJEELING_LC_CTRL_REGS_BASE_ADDR 0x30150000
+#define TOP_DARJEELING_LC_CTRL_REGS_BASE_ADDR 0x30140000
 
 /**
  * Peripheral size for regs device on lc_ctrl in top darjeeling.
@@ -228,7 +230,7 @@
  * This should be used with #mmio_region_from_addr to access the memory-mapped
  * registers associated with the peripheral (usually via a DIF).
  */
-#define TOP_DARJEELING_ALERT_HANDLER_BASE_ADDR 0x30160000
+#define TOP_DARJEELING_ALERT_HANDLER_BASE_ADDR 0x30150000
 
 /**
  * Peripheral size for alert_handler in top darjeeling.
@@ -306,7 +308,7 @@
  * address between #TOP_DARJEELING_CLKMGR_AON_BASE_ADDR and
  * `TOP_DARJEELING_CLKMGR_AON_BASE_ADDR + TOP_DARJEELING_CLKMGR_AON_SIZE_BYTES`.
  */
-#define TOP_DARJEELING_CLKMGR_AON_SIZE_BYTES 0x40
+#define TOP_DARJEELING_CLKMGR_AON_SIZE_BYTES 0x80
 /**
  * Peripheral base address for pinmux_aon in top darjeeling.
  *
@@ -358,6 +360,23 @@
  * `TOP_DARJEELING_AST_BASE_ADDR + TOP_DARJEELING_AST_SIZE_BYTES`.
  */
 #define TOP_DARJEELING_AST_SIZE_BYTES 0x400
+/**
+ * Peripheral base address for sensor_ctrl in top darjeeling.
+ *
+ * This should be used with #mmio_region_from_addr to access the memory-mapped
+ * registers associated with the peripheral (usually via a DIF).
+ */
+#define TOP_DARJEELING_SENSOR_CTRL_BASE_ADDR 0x30020000
+
+/**
+ * Peripheral size for sensor_ctrl in top darjeeling.
+ *
+ * This is the size (in bytes) of the peripheral's reserved memory area. All
+ * memory-mapped registers associated with this peripheral should have an
+ * address between #TOP_DARJEELING_SENSOR_CTRL_BASE_ADDR and
+ * `TOP_DARJEELING_SENSOR_CTRL_BASE_ADDR + TOP_DARJEELING_SENSOR_CTRL_SIZE_BYTES`.
+ */
+#define TOP_DARJEELING_SENSOR_CTRL_SIZE_BYTES 0x40
 /**
  * Peripheral base address for core device on soc_proxy in top darjeeling.
  *
@@ -942,7 +961,7 @@
  * This should be used with #mmio_region_from_addr to access the memory-mapped
  * registers associated with the peripheral (usually via a DIF).
  */
-#define TOP_DARJEELING_SOC_DBG_CTRL_CORE_BASE_ADDR 0x30170000
+#define TOP_DARJEELING_SOC_DBG_CTRL_CORE_BASE_ADDR 0x30160000
 
 /**
  * Peripheral size for core device on soc_dbg_ctrl in top darjeeling.
@@ -969,7 +988,7 @@
  * address between #TOP_DARJEELING_RV_CORE_IBEX_CFG_BASE_ADDR and
  * `TOP_DARJEELING_RV_CORE_IBEX_CFG_BASE_ADDR + TOP_DARJEELING_RV_CORE_IBEX_CFG_SIZE_BYTES`.
  */
-#define TOP_DARJEELING_RV_CORE_IBEX_CFG_SIZE_BYTES 0x800
+#define TOP_DARJEELING_RV_CORE_IBEX_CFG_SIZE_BYTES 0x100
 
 /**
  * MMIO Region

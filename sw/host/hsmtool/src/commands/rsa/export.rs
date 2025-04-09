@@ -62,7 +62,7 @@ impl Export {
         bail!("RSA export by wrapping is not supported yet!");
         // FIXME(cfrantz): Turn this back on when cryptoki includes the correct mechanisms.
         //let wrapped = session.wrap_key(&Mechanism::RsaPkcs, wkey, object)?;
-        //std::fs::write(&self.filename, &wrapped)?;
+        //helper::write_file(&self.filename, &wrapped)?;
         //Ok(())
     }
 }

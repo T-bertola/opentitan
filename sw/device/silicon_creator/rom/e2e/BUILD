@@ -14,6 +14,7 @@ load(
     "otp_partition",
 )
 load("//rules:rom_e2e.bzl", "maybe_skip_in_ci")
+load("//rules:splice.bzl", "bitstream_splice")
 load(
     "//sw/device/silicon_creator/rom/e2e:defs.bzl",
     "MSG_PASS",
@@ -65,6 +66,17 @@ otp_image(
     visibility = ["//visibility:private"],
 )
 
+bitstream_splice(
+    name = "bitstream_default_otp",
+    src = "//hw/bitstream:mask_rom",
+    data = ":otp_img_default",
+    instance = "otp",
+    meminfo = "//hw/bitstream:cw310_mmi",
+    tags = maybe_skip_in_ci(CONST.LCV.RMA),
+    update_usr_access = True,
+    visibility = ["//visibility:private"],
+)
+
 opentitan_test(
     name = "rom_e2e_default_otp_bootup",
     srcs = [":empty_test"],
@@ -72,7 +84,7 @@ opentitan_test(
         "//hw/top_earlgrey:fpga_cw310_rom_with_fake_keys": None,
     },
     fpga = fpga_params(
-        otp = ":otp_img_default",
+        bitstream = ":bitstream_default_otp",
         tags = maybe_skip_in_ci(CONST.LCV.RMA),
     ),
     deps = [
@@ -91,11 +103,10 @@ opentitan_test(
             "//hw/top_earlgrey:fpga_cw310",
             "//hw/top_earlgrey:sim_dv",
             "//hw/top_earlgrey:sim_verilator",
-            "//hw/top_darjeeling:sim_dv",
         ],
         linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_{}".format(slot),
         deps = [
-            "//hw/top:otp_ctrl_c_regs",
+            "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
             "//sw/device/lib/testing/test_framework:ottf_main",
             "//sw/device/silicon_creator/lib/drivers:lifecycle",
             "//sw/device/silicon_creator/lib/drivers:otp",
@@ -129,11 +140,10 @@ opentitan_test(
             "//hw/top_earlgrey:fpga_cw310",
             "//hw/top_earlgrey:sim_dv",
             "//hw/top_earlgrey:sim_verilator",
-            "//hw/top_darjeeling:sim_dv",
         ],
         linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_{}".format(slot),
         deps = [
-            "//hw/top:otp_ctrl_c_regs",
+            "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
             "//sw/device/lib/testing/test_framework:ottf_main",
             "//sw/device/silicon_creator/lib/drivers:lifecycle",
             "//sw/device/silicon_creator/lib/drivers:otp",
@@ -153,14 +163,13 @@ opentitan_test(
             "//hw/top_earlgrey:fpga_cw310_rom_with_fake_keys": None,
             "//hw/top_earlgrey:sim_dv": None,
             "//hw/top_earlgrey:sim_verilator": None,
-            "//hw/top_darjeeling:sim_dv": None,
         },
         linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_{}".format(slot),
         # We need to specify the manifest because the simulation environments do not
         # specify one by default.
         manifest = "//sw/device/silicon_creator/rom_ext:manifest",
         deps = [
-            "//hw/top:otp_ctrl_c_regs",
+            "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
             "//sw/device/lib/testing/test_framework:ottf_main",
             "//sw/device/silicon_creator/lib/drivers:lifecycle",
             "//sw/device/silicon_creator/lib/drivers:otp",
@@ -202,7 +211,7 @@ opentitan_test(
 ]
 
 # Corrupt binaries
-# Note: the naming of the files is important for dvsim. The code expects file to be named:
+# Note: the naming of the files is important for dvsim. The code expects fiel to be named:
 # - binary: <something>.<key_name>.signed.bin
 # - vmem: <something>.<key_name>.signed.64.vmem
 # - flash vmem: <something>.<key_name>.signed.64.scr.vmem
@@ -370,8 +379,8 @@ opentitan_test(
         exit_success = MSG_PASS,
     ),
     deps = [
-        "//hw/top:pinmux_c_regs",
-        "//hw/top:uart_c_regs",
+        "//hw/ip/uart/data:uart_c_regs",
+        "//hw/top_earlgrey/ip_autogen/pinmux:pinmux_c_regs",
         "//hw/top_earlgrey/sw/autogen:top_earlgrey",
         "//sw/device/lib/runtime:hart",
         "//sw/device/lib/runtime:log",
@@ -393,14 +402,14 @@ opentitan_test(
         "//hw/top_earlgrey:fpga_cw310_rom_with_fake_keys": None,
     },
     fpga = fpga_params(
-        otp = "//hw/top_earlgrey/data/otp:img_dev",
+        otp = "//hw/ip/otp_ctrl/data:img_dev",
         # TODO(lowRISC/opentitan#13603): Remove this "manual" tag when the
         # bitstream target can fetch pre-spliced bitstream from GCP.
         tags = ["manual"],
     ),
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
     deps = [
-        "//hw/top:otp_ctrl_c_regs",
+        "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
         "//sw/device/lib/testing/test_framework:ottf_main",
         "//sw/device/silicon_creator/lib/drivers:lifecycle",
         "//sw/device/silicon_creator/lib/drivers:otp",
@@ -423,7 +432,7 @@ opentitan_test(
     ),
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
     deps = [
-        "//hw/top:otp_ctrl_c_regs",
+        "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
         "//sw/device/lib/testing/test_framework:ottf_main",
         "//sw/device/silicon_creator/lib/drivers:lifecycle",
         "//sw/device/silicon_creator/lib/drivers:otp",
@@ -454,7 +463,7 @@ opentitan_test(
     ),
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
     deps = [
-        "//hw/top:otp_ctrl_c_regs",
+        "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
         "//sw/device/lib/testing/test_framework:ottf_main",
         "//sw/device/silicon_creator/lib:boot_data",
         "//sw/device/silicon_creator/lib/drivers:lifecycle",

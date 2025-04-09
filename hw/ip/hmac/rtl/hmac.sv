@@ -63,6 +63,7 @@ module hmac
   logic [31:0] msg_fifo_wdata;
   logic [31:0] msg_fifo_wmask;
   logic [31:0] msg_fifo_rdata;
+  logic        msg_fifo_rvalid;
   logic [1:0]  msg_fifo_rerror;
   logic [31:0] msg_fifo_wdata_endian;
   logic [31:0] msg_fifo_wmask_endian;
@@ -513,6 +514,7 @@ module hmac
   // Instances //
   ///////////////
 
+  assign msg_fifo_rvalid = msg_fifo_req & ~msg_fifo_we;
   assign msg_fifo_rdata  = '1;  // Return all F
   assign msg_fifo_rerror = '1;  // Return error for read access
   assign msg_fifo_gnt    = msg_fifo_req & ~hmac_fifo_wsel & packer_ready;
@@ -529,6 +531,7 @@ module hmac
   assign reg_fifo_wentry.data = conv_endian32(reg_fifo_wdata, 1'b1); // always convert
   assign reg_fifo_wentry.mask = {reg_fifo_wmask[0],  reg_fifo_wmask[8],
                                  reg_fifo_wmask[16], reg_fifo_wmask[24]};
+  assign fifo_full   = ~fifo_wready;
   assign fifo_empty  = ~fifo_rvalid;
   assign fifo_wvalid = (hmac_fifo_wsel && fifo_wready) ? hmac_fifo_wvalid : reg_fifo_wvalid;
 
@@ -567,7 +570,7 @@ module hmac
     .wdata_i (fifo_wdata),
 
     .depth_o (fifo_depth),
-    .full_o  (fifo_full),
+    .full_o  (),
 
     .rvalid_o(fifo_rvalid),
     .rready_i(fifo_rready),
@@ -599,7 +602,7 @@ module hmac
     .intg_error_o               (               ),
     .user_rsvd_o                (               ),
     .rdata_i                    (msg_fifo_rdata ),
-    .rvalid_i                   (1'b0           ),
+    .rvalid_i                   (msg_fifo_rvalid),
     .rerror_i                   (msg_fifo_rerror),
     .compound_txn_in_progress_o (),
     .readback_en_i              (prim_mubi_pkg::MuBi4False),
@@ -931,11 +934,6 @@ module hmac
   // hmac_en should be modified only when the logic is Idle
   `ASSERT(ValidHmacEnConditionAssert,
           hmac_en != $past(hmac_en) |-> !in_process && !initiated)
-
-  // When wipe_secret is high, sensitive internal variables are cleared by extending the wipe
-  // value specifed in the register
-  `ASSERT(WipeSecretKeyAssert,
-          wipe_secret |=> (secret_key == {($bits(secret_key)/$bits(wipe_v)){$past(wipe_v)}}))
 
   // All outputs should be known value after reset
   `ASSERT_KNOWN(IntrHmacDoneOKnown, intr_hmac_done_o)

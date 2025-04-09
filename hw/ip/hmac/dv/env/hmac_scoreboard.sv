@@ -29,11 +29,8 @@ class hmac_scoreboard extends cip_base_scoreboard #(.CFG_T (hmac_env_cfg),
   bit             hmac_stopped_last;
   bit             hmac_start_last;
   bit             hmac_continue_last;
-  bit             hmac_fifo_full_last;
-  bit [TL_DW-1:0] last_intr_test_wr;
+  bit [TL_DW-1:0] intr_test;
   bit [TL_DW-1:0] intr_state_exp;
-  bit [TL_DW-1:0] nist_act_digest[NUM_DIGESTS];
-  bit             hmac_done_seen;
 
   // Standard SV/UVM methods
   extern function new(string name="", uvm_component parent=null);
@@ -61,9 +58,6 @@ class hmac_scoreboard extends cip_base_scoreboard #(.CFG_T (hmac_env_cfg),
   // Query SHA/HMAC to the C model to get expected digest
   extern virtual function void predict_digest(bit [7:0] msg_i[], bit use_gmv = 1, bit sha_en = 0,
     bit hmac_en = 0, bit [3:0] digest_size = 0, bit [5:0] key_length = 0);
-  // Compare digest for NIST test vectors
-  extern function void compare_nist_digest(
-    bit [TL_DW-1:0] act_digest[NUM_DIGESTS], bit [3:0] digest_size);
   // Update the write message length
   extern virtual function void update_wr_msg_length(int size_bytes);
   // Model the interrupt code error
@@ -94,10 +88,6 @@ task hmac_scoreboard::run_phase(uvm_phase phase);
       fork
         begin : main_thread
           fork
-            begin
-              cfg.clk_rst_vif.wait_clks(1);   // Wait one clk cycle to be sure IDLE state is set
-              check_idle(1'b1);               // Check IDLE after a reset has occured
-            end
             hmac_process_fifo_status();
             hmac_process_fifo_wr();
             hmac_process_fifo_rd();
@@ -119,6 +109,7 @@ task hmac_scoreboard::process_tl_access(tl_seq_item item, tl_channels_e channel,
   uvm_reg csr;
   string  csr_name;
   bit     do_read_check           = 1'b1;
+  bit     do_cycle_accurate_check = 1'b1;
   bit     write                   = item.is_write();
   bit [TL_AW-1:0] addr_mask       = ral.get_addr_mask();
   uvm_reg_addr_t  csr_addr        = cfg.ral_models[ral_name].get_word_aligned_addr(item.a_addr);
@@ -271,17 +262,17 @@ task hmac_scoreboard::process_tl_access(tl_seq_item item, tl_channels_e channel,
           end
         end
         "intr_test": begin // testmode, intr_state is W1C, cannot use UVM_PREDICT_WRITE
-          last_intr_test_wr = item.a_data;
+          intr_test = item.a_data;
           // As INTR_STATE.hmac_err and INTR_STATE.hmac_done are RW1C, we should get back the
           // current state
-          intr_state_exp = last_intr_test_wr | `gmv(ral.intr_state);
+          intr_state_exp = intr_test | `gmv(ral.intr_state);
           void'(ral.intr_state.predict(.value(intr_state_exp), .kind(UVM_PREDICT_DIRECT)));
           if (cfg.en_cov) begin
             bit [TL_DW-1:0] intr_en = `gmv(ral.intr_enable);
             hmac_intr_e     intr;
             intr = intr.first;
             do begin
-              cov.intr_test_cg.sample(intr, last_intr_test_wr[intr], intr_en[intr],
+              cov.intr_test_cg.sample(intr, intr_test[intr], intr_en[intr],
                                       intr_state_exp[intr]);
               intr = intr.next;
             end while (intr != intr.first);
@@ -325,7 +316,7 @@ task hmac_scoreboard::process_tl_access(tl_seq_item item, tl_channels_e channel,
           key[key_idx] = item.a_data;
         end
         "wipe_secret": begin
-          // Do nothing
+          // TODO (#23563): when writing wipe_secret, trigger RTL assertion checks
         end
         "intr_enable", "intr_state", "alert_test", "status": begin
           // Do nothing
@@ -378,14 +369,14 @@ task hmac_scoreboard::process_tl_access(tl_seq_item item, tl_channels_e channel,
     // Update expected status register
     if (csr_name == "status") begin
       hmac_status_data = (hmac_idle       << HmacStaIdle)         |
-                         (hmac_fifo_empty << HmacStaMsgFifoEmpty) |
-                         (hmac_fifo_full  << HmacStaMsgFifoFull)  |
-                         (hmac_fifo_depth << HmacStaMsgFifoDepthLsb);
+                          (hmac_fifo_empty << HmacStaMsgFifoEmpty) |
+                          (hmac_fifo_full  << HmacStaMsgFifoFull)  |
+                          (hmac_fifo_depth << HmacStaMsgFifoDepthLsb);
       void'(ral.status.predict(.value(hmac_status_data), .kind(UVM_PREDICT_READ)));
     // Update expected FIFO Empty interrupt register
     end else if (csr_name == "intr_state") begin
       // Bitwise OR is needed to retrieve previous values as some fields are W1C
-      bit intr_state_empty = fifo_empty_intr | last_intr_test_wr[HmacMsgFifoEmpty];
+      bit intr_state_empty = fifo_empty_intr | intr_test[HmacMsgFifoEmpty];
       void'(ral.intr_state.fifo_empty.predict(.value(intr_state_empty), .kind(UVM_PREDICT_READ)));
     end
     return;
@@ -395,6 +386,9 @@ task hmac_scoreboard::process_tl_access(tl_seq_item item, tl_channels_e channel,
   if (!write) begin
     case (csr_name)
       "intr_state": begin
+        if (!do_cycle_accurate_check) begin
+          do_read_check = 0;
+        end
         if (cfg.en_cov) begin
           bit [TL_DW-1:0] intr_en = `gmv(ral.intr_enable);
           hmac_intr_e     intr;
@@ -414,8 +408,6 @@ task hmac_scoreboard::process_tl_access(tl_seq_item item, tl_channels_e channel,
           end
           check_idle(1'b1);
           flush();
-          // Flag to allow NIST digest comparison, clear it on reset or on last digest read
-          hmac_done_seen = 1;
         end
         // hmac has been triggered and config is invalid
         if (hmac_start && invalid_cfg) begin
@@ -457,62 +449,37 @@ task hmac_scoreboard::process_tl_access(tl_seq_item item, tl_channels_e channel,
                     previous_digest_size, `gmv(ral.cfg.digest_size),
                     expected_digest_size), UVM_HIGH)
 
-        if (cfg.is_nist_test) begin
-          // For the NIST, don't swap the read digest value
-          nist_act_digest[digest_idx] = item.d_data;
-          // Compare digest only when hmac_done_seen. This is needed as
-          // we are performing reads from the sequences even when the disgest is not supposed to be
-          // ready from the DUT.
-          if ((digest_idx == NUM_DIGESTS-1) && hmac_done_seen) begin
-            compare_nist_digest(nist_act_digest, expected_digest_size);
-            hmac_done_seen = 0;
-          end
-        end else begin
-          // Predict intermediate digest values when S&R has been triggered
-          // TODO (#23240): modify the C model to be able to provide intermediate digest
-          // if (hmac_stopped) predict_digest(msg_q);
-          // And remove lines, when C model will support intermediate hash. For the moment don't
-          // compare digest. Only the final digest will be compared in case of S&R, this is enough
-          // for the moment
-          // Proceed with read digest and compare values with expected
-          if (!hmac_stopped) begin
-            // If wipe_secret is triggered, ensure the predicted value does not match the read out
-            // digest and update the predicted value with the read out value.
-            if (cfg.wipe_secret_triggered) begin
-              `DV_CHECK_NE(real_digest_val, exp_digest[digest_idx])
-              `uvm_info(`gfn, $sformatf("updating digest to read value after wiping 0x%0h",
-                        exp_digest[digest_idx]), UVM_HIGH)
-              // update new digest data to the exp_digest variable.
-              exp_digest[digest_idx] = real_digest_val;
-            end else begin // !cfg.wipe_secret_triggered
-              // only check till digest_idx = 7 for SHA-2 256 and till digest_idx = 11 for SHA-2 384
-              // Remaining digest values are irrelevant or truncated for these digest sizes.
-              if (((expected_digest_size == SHA2_256) && (digest_idx < 8))  ||
-                  ((expected_digest_size == SHA2_384) && (digest_idx < 12)) ||
-                    expected_digest_size == SHA2_512) begin
-                `DV_CHECK_EQ(real_digest_val, exp_digest[digest_idx])
-              end
+        // Predict intermediate digest values when S&R has been triggered
+        // TODO (#23240): modify the C model to be able to provide intermediate digest
+        // if (hmac_stopped) predict_digest(msg_q);
+        // And remove lines, when C model will support intermediate hash. For the moment don't
+        // compare digest. Only the final digest will be compared in case of S&R, this is enough
+        // for the moment
+        // Proceed with read digest and compare values with expected
+        if (!hmac_stopped) begin
+          // If wipe_secret is triggered, ensure the predicted value does not match the read out
+          // digest and update the predicted value with the read out value.
+          if (cfg.wipe_secret_triggered) begin
+            `DV_CHECK_NE(real_digest_val, exp_digest[digest_idx])
+            `uvm_info(`gfn, $sformatf("updating digest to read value after wiping 0x%0h",
+                      exp_digest[digest_idx]), UVM_HIGH)
+            // update new digest data to the exp_digest variable.
+            exp_digest[digest_idx] = real_digest_val;
+          end else begin // !cfg.wipe_secret_triggered
+            // only check till digest_idx = 7 for SHA-2 256 and till digest_idx = 11 for SHA-2 384
+            // Remaining digest values are irrelevant or truncated for these digest sizes.
+            if (((expected_digest_size == SHA2_256) && (digest_idx < 8))  ||
+                ((expected_digest_size == SHA2_384) && (digest_idx < 12)) ||
+                  expected_digest_size == SHA2_512) begin
+              `DV_CHECK_EQ(real_digest_val, exp_digest[digest_idx])
             end
           end
         end
         return;
       end
       "status": begin
-        bit [5:0] rd_fifo_depth = item.d_data[HmacStaMsgFifoDepthMsb:HmacStaMsgFifoDepthLsb];
-        if (cfg.sar_skip_ctxt) begin
+        if (!do_cycle_accurate_check || cfg.sar_skip_ctxt) begin
           do_read_check = 0;
-        end else begin
-          // We don't really need to be cycle accurate for this status register, instead we
-          // tolerate +1
-          if ((`gmv(ral.status.fifo_depth)   != rd_fifo_depth) &&
-              (`gmv(ral.status.fifo_depth)+1 != rd_fifo_depth)) begin
-            `uvm_error(`gfn, $sformatf({"Check failed, read status.fifo_depth is not matching ",
-                "expected value, not even with tolerance of +1: got 0x%0d but exp 0x%0h"},
-                rd_fifo_depth, `gmv(ral.status.fifo_depth)))
-          // Update the expected value to the read value to get the check pass
-          end else begin
-            void'(ral.status.fifo_depth.predict(.value(rd_fifo_depth), .kind(UVM_PREDICT_READ)));
-          end
         end
         if (cfg.en_cov) cov.status_cg.sample(item.d_data, `gmv(ral.cfg));
       end
@@ -565,20 +532,18 @@ function void hmac_scoreboard::reset(string kind = "HARD");
   // Should be reinitialized before flushing as it will be used as a condition
   hmac_stopped = 0;
   flush();
-  key               = '{default:0};
-  exp_digest        = '{default:0};
-  hmac_idle         = ral.status.hmac_idle.get_reset();
-  hmac_fifo_empty   = ral.status.fifo_empty.get_reset();
-  hmac_fifo_full    = ral.status.fifo_full.get_reset();
-  hmac_fifo_depth   = ral.status.fifo_depth.get_reset();
-  hmac_start        = ral.cmd.hash_start.get_reset();
-  sha_en            = ral.cfg.sha_en.get_reset();
-  last_intr_test_wr = ral.intr_test.get_reset();
-  hmac_done_seen    = 0;
+  key             = '{default:0};
+  exp_digest      = '{default:0};
+  hmac_idle       = ral.status.hmac_idle.get_reset();
+  hmac_fifo_empty = ral.status.fifo_empty.get_reset();
+  hmac_fifo_full  = ral.status.fifo_full.get_reset();
+  hmac_fifo_depth = ral.status.fifo_depth.get_reset();
+  hmac_start      = ral.cmd.hash_start.get_reset();
+  sha_en          = ral.cfg.sha_en.get_reset();
+  hmac_stopped    = 0;
   msg_q.delete();
   msg_part_q.delete();
   cfg.wipe_secret_triggered = 0;
-  foreach (nist_act_digest[i]) nist_act_digest[i] = ral.digest[i].get_reset();
 endfunction : reset
 
 // clear variables after hmac_done
@@ -598,8 +563,8 @@ function void hmac_scoreboard::flush();
   hmac_continue_last  = 0;
   fifo_full_detected  = 0;
   fifo_empty_intr     = 0;
-  void'(ral.intr_state.fifo_empty.predict(
-    .value(fifo_empty_intr | last_intr_test_wr[HmacMsgFifoEmpty]), .kind(UVM_PREDICT_READ)));
+  void'(ral.intr_state.fifo_empty.predict(.value(fifo_empty_intr | intr_test[HmacMsgFifoEmpty]),
+                                          .kind(UVM_PREDICT_READ)));
 endfunction : flush
 
 // hmac_wr_cnt was incremented every time when msg_q has 4 bytes streamed in
@@ -629,7 +594,7 @@ task hmac_scoreboard::hmac_process_fifo_wr();
       if ((hmac_wr_cnt - hmac_rd_cnt) == HMAC_MSG_FIFO_DEPTH_WR) begin
         wait((hmac_wr_cnt - hmac_rd_cnt) < HMAC_MSG_FIFO_DEPTH_WR);
       end
-      cfg.clk_rst_vif.wait_n_clks(1);
+      @(negedge cfg.clk_rst_vif.clk);
       if (!hmac_stopped) begin
         hmac_wr_cnt++;
         `uvm_info(`gfn, $sformatf("increase wr cnt %0d", hmac_wr_cnt), UVM_HIGH)
@@ -642,85 +607,66 @@ endtask : hmac_process_fifo_wr
 task hmac_scoreboard::hmac_process_fifo_status();
   bit pre_fifo_empty_intr;
   forever @(hmac_wr_cnt, hmac_rd_cnt, hmac_process, hmac_start, hmac_stopped, hmac_continue) begin
-    // Spawn a thread as an event from the list above might occur during the time we wait
-    // for the clock cycle (later in this thread).
-    fork begin
-      // Store hmac_process and hmac_start to be able to detect when it goes up, as it could remain
-      // up for a while
-      bit hmac_fifo_full_posedge;
-      bit hmac_process_posedge  = hmac_process & ~hmac_process_last;
-      bit hmac_start_posedge    = hmac_start & ~hmac_start_last;
-      bit hmac_stopped_posedge  = hmac_stopped & ~hmac_stopped_last;
-      bit hmac_continue_posedge = hmac_continue & ~hmac_continue_last;
+    // Store hmac_process and hmac_start to be able to detect when it goes up, as it could remain
+    // up for a while
+    bit hmac_process_posedge  = hmac_process & ~hmac_process_last;
+    bit hmac_start_posedge    = hmac_start & ~hmac_start_last;
+    bit hmac_stopped_posedge  = hmac_stopped & ~hmac_stopped_last;
+    bit hmac_continue_posedge = hmac_continue & ~hmac_continue_last;
 
-      // Store last value to be able to detect signal change
-      hmac_process_last   = hmac_process;
-      hmac_stopped_last   = hmac_stopped;
-      hmac_start_last     = hmac_start;
-      hmac_continue_last  = hmac_continue;
-      hmac_fifo_full_last = hmac_fifo_full;
+    // Store last value to be able to detect signal change
+    hmac_process_last  = hmac_process;
+    hmac_stopped_last  = hmac_stopped;
+    hmac_start_last    = hmac_start;
+    hmac_continue_last = hmac_continue;
 
-      // When hmac_wr_cnt and hmac_rd_cnt update at the same time, wait for the clock rising edge
-      // to guarantee both get updated and at the same time as the DUT
-      cfg.clk_rst_vif.wait_clks(1);
+    // when hmac_wr_cnt and hmac_rd_cnt update at the same time, wait the clock rising edge
+    // to guarantee get both update and at the same time as the DUT
+    cfg.clk_rst_vif.wait_clks(1);
 
-      // Compute FIFO level flags
-      hmac_fifo_depth = hmac_wr_cnt - hmac_rd_cnt;
-      hmac_fifo_full  = hmac_fifo_depth == HMAC_MSG_FIFO_DEPTH_WR;
-      hmac_fifo_empty = hmac_fifo_depth == 0;
+    // Compute FIFO level flags
+    hmac_fifo_depth = hmac_wr_cnt - hmac_rd_cnt;
+    hmac_fifo_full  = hmac_fifo_depth == HMAC_MSG_FIFO_DEPTH_WR;
+    hmac_fifo_empty = hmac_fifo_depth == 0;
 
-      hmac_fifo_full_posedge = hmac_fifo_full & ~hmac_fifo_full_last;
+    // The FIFO empty interrupt is raised only if the message FIFO is actually writable by
+    // software, i.e., if all of the following conditions are met:
+    //   1- The HMAC block is not running in HMAC mode and performing the second round of
+    //      computing the final hash of the outer key as well as the result of the first round
+    //      using the inner key.
+    //   2- Software has not yet written the Process or Stop command to finish the hashing
+    //      operation.
+    //   3- The message FIFO must also have been full previously. Otherwise, the hardware empties
+    //      the FIFO faster than software can fill it and there is no point in interrupting the
+    //      software to inform it about the message FIFO being empty.
+    if (fifo_full_detected && hmac_fifo_empty) begin
+      pre_fifo_empty_intr = 1;
+    end else begin
+      pre_fifo_empty_intr = 0;
+    end
 
-      // Check whether FIFO full should be cleared (for another reason than the emptiness)
-      if (hmac_process_posedge || hmac_start_posedge || hmac_stopped_posedge ||
-          hmac_continue_posedge) begin
-        fifo_full_detected = 0;
+    // Delay FIFO empty signal to be aligned with the DUT behavior
+    fork
+      begin
+        cfg.clk_rst_vif.wait_clks(1);
+        fifo_empty_intr = pre_fifo_empty_intr;
       end
+    join_none
 
-      // The FIFO empty interrupt is raised only if the message FIFO is actually writable by
-      // software, i.e., if all of the following conditions are met:
-      //   1- The HMAC block is not running in HMAC mode and performing the second round of
-      //      computing the final hash of the outer key as well as the result of the first round
-      //      using the inner key.
-      //   2- Software has not yet written the Process or Stop command to finish the hashing
-      //      operation.
-      //   3- The message FIFO must also have been full previously. Otherwise, the hardware empties
-      //      the FIFO faster than software can fill it and there is no point in interrupting the
-      //      software to inform it about the message FIFO being empty.
-      if (fifo_full_detected && hmac_fifo_empty) begin
-        pre_fifo_empty_intr = 1;
-      end else begin
-        pre_fifo_empty_intr = 0;
-      end
-
-      // Delay FIFO empty signal to be aligned with the DUT behavior
-      fork
-        begin
-          cfg.clk_rst_vif.wait_clks(1);
-          fifo_empty_intr = pre_fifo_empty_intr;
-        end
-      join_none
-
-      // Ensures that FIFO levels have been updated as a read and write may have race conditions
-      // and 2 processes are spawned in parallel. And wait on the second negative edge to be sure
-      // that empty/full flags will be up to date.
-      cfg.clk_rst_vif.wait_n_clks(2);
-      // Reset full flag when emptiness has been reached
-      if (hmac_fifo_empty) begin
-        fifo_full_detected = 0;
-      // Check whether FIFO full has been detected for the ongoing message but the retrictions cases
-      // have the priority in case full is set at the same moment. Use the posedge to be sure that
-      // it is high because of the current message and check also that it's still high at that time.
-      end else if (hmac_fifo_full_posedge && hmac_fifo_full) begin
-        fifo_full_detected = 1;
-      end
-    end join_none
+    // Check whether FIFO full has been detected for the ongoing message but the retrictions cases
+    // have the priority in case full is set at the same moment
+    if (hmac_fifo_empty || hmac_start_posedge || hmac_process_posedge ||
+        hmac_stopped_posedge || hmac_continue_posedge) begin
+      fifo_full_detected = 0;
+    end else if (hmac_fifo_full) begin
+      fifo_full_detected = 1;
+    end
   end
 endtask : hmac_process_fifo_status
 
 // Spawn process to check interrupt pins in test mode
 task hmac_scoreboard::hmac_intr_test();
-  foreach (last_intr_test_wr[intr_i]) begin
+  foreach (intr_test[intr_i]) begin
     fork begin
       hmac_intr_test_pin(intr_i);
     end join_none
@@ -731,9 +677,9 @@ endtask : hmac_intr_test
 task hmac_scoreboard::hmac_intr_test_pin(int intr_i);
   bit [TL_DW-1:0] intr_en;
   hmac_intr_e     intr = hmac_intr_e'(intr_i);
-  forever @(last_intr_test_wr[intr_i]) begin
+  forever @(intr_test[intr_i]) begin
     intr_en = `gmv(ral.intr_enable);
-    if (last_intr_test_wr[intr_i]) begin
+    if (intr_test[intr_i]) begin
       // Check interrupt state pins only if enabled
       if (intr_en[intr_i]) begin
         fork: intr_pins
@@ -907,7 +853,7 @@ function void hmac_scoreboard::predict_digest(
                                                   big_endian_key[0:31], msg_i, exp_digest);
       end
       `uvm_info(`gfn, $sformatf("HMAC of key=%p (key_swap=%1b), msg_i=%p: %p",
-                                key, `gmv(ral.cfg.key_swap), msg_i, exp_digest), UVM_MEDIUM)
+                                key, `gmv(ral.cfg.key_swap), msg_i, exp_digest), UVM_LOW)
     end
     2'b01: begin
       if (digest_size == SHA2_256) begin
@@ -917,7 +863,7 @@ function void hmac_scoreboard::predict_digest(
       end else if (digest_size == SHA2_512) begin
         cryptoc_dpi_pkg::sv_dpi_get_sha512_digest(msg_i, exp_digest);
       end
-      `uvm_info(`gfn, $sformatf("SHA-2 digest of msg_i=%p: %p", msg_i, exp_digest), UVM_MEDIUM)
+      `uvm_info(`gfn, $sformatf("SHA-2 digest of msg_i=%p: %p", msg_i, exp_digest), UVM_LOW)
     end
     default: begin
       // disgest is cleared if sha_en = 0
@@ -925,109 +871,6 @@ function void hmac_scoreboard::predict_digest(
     end
   endcase
 endfunction : predict_digest
-
-// Compare digest for NIST test vectors, which means that the expected digests are taken from the
-// test vector files. As the sequence is not supposed to provide any information, we need to
-// parse all the NIST files matching with the current digest size and HMAC enablement, and find
-// out where the current digests are matching with the expected digests. If all the 16 digests are
-// matching, then this comparison is successful and the coverage sampling can happen.
-function void hmac_scoreboard::compare_nist_digest(bit [TL_DW-1:0] act_digest[NUM_DIGESTS],
-                                                   bit [3:0]       digest_size);
-  bit [TL_DW-1:0] exp_nist_digest[NUM_DIGESTS];
-  string vector_list[];
-  test_vectors_pkg::test_vectors_t nist_vectors[string][];
-  bit hmac_en              = `gmv(ral.cfg.hmac_en);
-  int matching_digest_cnt  = 0;
-  int nb_relevant_digest   = 0;
-  int list_i, vec_i, dig_i = 0;
-
-  // Retrieve the appropriate test vector list based on the digest size and HMAC enablement
-  if (hmac_en) begin
-    if (digest_size == SHA2_256) begin
-      vector_list = test_vectors_pkg::hmac_sha256_file_list;
-    end else if (digest_size == SHA2_384) begin
-      vector_list = test_vectors_pkg::hmac_sha384_file_list;
-    end else if (digest_size == SHA2_512) begin
-      vector_list = test_vectors_pkg::hmac_sha512_file_list;
-    end else begin
-      `uvm_error(`gfn, "Invalid digest size for HMAC SHA-2 test vectors")
-    end
-  end else begin
-    if (digest_size == SHA2_256) begin
-      vector_list = test_vectors_pkg::sha2_256_file_list;
-    end else if (digest_size == SHA2_384) begin
-      vector_list = test_vectors_pkg::sha2_384_file_list;
-    end else if (digest_size == SHA2_512) begin
-      vector_list = test_vectors_pkg::sha2_512_file_list;
-    end else begin
-      `uvm_error(`gfn, "Invalid digest size for SHA-2 only test vectors")
-    end
-  end
-
-  // Retrieve the expected digest from each of the test vector files, and store it into
-  // an associative array indexed by the test vector name
-  foreach (vector_list[i]) begin
-    test_vectors_pkg::get_hash_test_vectors(vector_list[i], nist_vectors[vector_list[i]], 0);
-  end
-
-  // Find if an expected digest is matching the current digest, if yes carry on with the next
-  // digest, otherwise break the loop and jump to the next test vector. If all the 16 digests are
-  // matching, then the comparison is successful.
-  // When the expected number of digests are matching, then no comparison is needed for the
-  // remaining vectors.
-  do begin
-    do begin
-      // Store the required number of matching digests to be found:
-      // For SHA-2 only (when HMAC is disabled):
-      //   - based on the digest size
-      // For SHA-2 only (when HMAC is disabled):
-      //   - this information should be taken from the test vector file, and is always a multiple
-      //     of 4 bytes (word-aligned) --> (tag_len_byte/4)
-      if (!hmac_en) begin
-        if (digest_size == SHA2_256) begin
-          nb_relevant_digest = 8;
-        end else if (digest_size == SHA2_384) begin
-          nb_relevant_digest = 12;
-        end else if (digest_size == SHA2_512) begin
-          nb_relevant_digest = NUM_DIGESTS;
-        end
-      end else begin
-        nb_relevant_digest = nist_vectors[vector_list[list_i]][vec_i].digest_length_byte / 4;
-      end
-
-      // Reorganize the expected digest from the test vector file into a packed array
-      exp_nist_digest = {>>byte{nist_vectors[vector_list[list_i]][vec_i].exp_digest}};
-
-      // Compare only the relevant digests slices based on the digest size as the remaining
-      // digest register values are irrelevant and may contain previous values or zeroes.
-      do begin
-        if (act_digest[dig_i] == exp_nist_digest[dig_i]) begin
-          matching_digest_cnt++;
-        end else begin
-          matching_digest_cnt = 0;
-          break;  // Break the for loop and jump to the next vector
-        end
-        // Sample which vectors were fully matching
-        if (cfg.en_cov && (matching_digest_cnt == nb_relevant_digest)) begin
-          cov.nist_cov[get_nist_list_name(vector_list[list_i])].nist_test_cg.sample(vec_i);
-        end
-        dig_i++;
-      end while ((matching_digest_cnt < nb_relevant_digest) && (dig_i < nb_relevant_digest));
-      vec_i++;
-      dig_i = 0;
-    end while ((matching_digest_cnt < nb_relevant_digest) &&
-               (vec_i < nist_vectors[vector_list[list_i]].size()));
-    list_i++;
-    vec_i = 0;
-  end while ((matching_digest_cnt < nb_relevant_digest) && (list_i < vector_list.size()));
-
-  // Raise error if the whole actual digest array hasn't found any full matching vector
-  if (matching_digest_cnt < nb_relevant_digest) begin
-    `uvm_error(`gfn, $sformatf({"Expected to get %0d number of matching digests but got %0d for ",
-      "the current configuration: digest_size=%0s, hmac_en=%0d"},
-      nb_relevant_digest, matching_digest_cnt, get_digest_size(digest_size), hmac_en))
-  end
-endfunction : compare_nist_digest
 
 function void hmac_scoreboard::update_wr_msg_length(int size_bytes);
   uint64 size_bits = size_bytes * 8;

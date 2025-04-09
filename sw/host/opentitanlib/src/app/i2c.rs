@@ -131,6 +131,7 @@ impl Bus for LogicalI2cWrapper {
         serial_data: Option<&Rc<dyn GpioPin>>,
         gsc_ready: Option<&Rc<dyn GpioPin>>,
     ) -> Result<()> {
+        log::error!("LogicalI2cWrapper::set_pins()");
         let mut inner = self.inner.borrow_mut();
         if serial_clock.is_some() {
             inner.serial_clock = serial_clock.map(Rc::clone);

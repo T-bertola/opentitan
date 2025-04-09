@@ -59,7 +59,7 @@ tl_device_t xbar_devices[$] = '{
         '{32'h21140000, 32'h211400ff}
     }},
     '{"rv_core_ibex__cfg", '{
-        '{32'h211f0000, 32'h211f07ff}
+        '{32'h211f0000, 32'h211f00ff}
     }},
     '{"sram_ctrl_main__regs", '{
         '{32'h211c0000, 32'h211c003f}
@@ -113,7 +113,7 @@ tl_device_t xbar_devices[$] = '{
         '{32'h30080000, 32'h3008007f}
     }},
     '{"gpio", '{
-        '{32'h30000000, 32'h300000ff}
+        '{32'h30000000, 32'h3000007f}
     }},
     '{"spi_host0", '{
         '{32'h30300000, 32'h3030003f}
@@ -131,22 +131,25 @@ tl_device_t xbar_devices[$] = '{
         '{32'h30410000, 32'h3041007f}
     }},
     '{"clkmgr_aon", '{
-        '{32'h30420000, 32'h3042003f}
+        '{32'h30420000, 32'h3042007f}
     }},
     '{"pinmux_aon", '{
         '{32'h30460000, 32'h304607ff}
     }},
     '{"otp_ctrl__core", '{
-        '{32'h30130000, 32'h30137fff}
+        '{32'h30130000, 32'h30130fff}
     }},
     '{"otp_ctrl__prim", '{
-        '{32'h30140000, 32'h3014001f}
+        '{32'h30138000, 32'h3013801f}
     }},
     '{"lc_ctrl__regs", '{
-        '{32'h30150000, 32'h301500ff}
+        '{32'h30140000, 32'h301400ff}
+    }},
+    '{"sensor_ctrl", '{
+        '{32'h30020000, 32'h3002003f}
     }},
     '{"alert_handler", '{
-        '{32'h30160000, 32'h301607ff}
+        '{32'h30150000, 32'h301507ff}
     }},
     '{"sram_ctrl_ret_aon__regs", '{
         '{32'h30500000, 32'h3050003f}
@@ -161,7 +164,7 @@ tl_device_t xbar_devices[$] = '{
         '{32'h30480000, 32'h304803ff}
     }},
     '{"soc_dbg_ctrl__core", '{
-        '{32'h30170000, 32'h3017001f}
+        '{32'h30160000, 32'h3016001f}
     }},
     '{"mbx0__soc", '{
         '{32'h01465000, 32'h0146501f}
@@ -182,7 +185,7 @@ tl_device_t xbar_devices[$] = '{
         '{32'h01465500, 32'h0146551f}
     }},
     '{"mbx6__soc", '{
-        '{32'h01496000, 32'h0149601f}
+        '{32'h01465600, 32'h0146561f}
     }},
     '{"mbx_pcie0__soc", '{
         '{32'h01460100, 32'h0146011f}
@@ -190,20 +193,14 @@ tl_device_t xbar_devices[$] = '{
     '{"mbx_pcie1__soc", '{
         '{32'h01460200, 32'h0146021f}
     }},
-    '{"racl_ctrl", '{
-        '{32'h01461f00, 32'h01461fff}
-    }},
-    '{"ac_range_check", '{
-        '{32'h01464000, 32'h014643ff}
-    }},
     '{"rv_dm__dbg", '{
         '{32'h00000000, 32'h000001ff}
     }},
     '{"mbx_jtag__soc", '{
-        '{32'h00002200, 32'h0000221f}
+        '{32'h00001000, 32'h0000101f}
     }},
     '{"lc_ctrl__dmi", '{
-        '{32'h00003000, 32'h00003fff}
+        '{32'h00020000, 32'h00020fff}
     }},
     '{"soc_dbg_ctrl__jtag", '{
         '{32'h00002300, 32'h0000231f}
@@ -239,6 +236,7 @@ tl_host_t xbar_hosts[$] = '{
         "otp_ctrl__core",
         "otp_ctrl__prim",
         "lc_ctrl__regs",
+        "sensor_ctrl",
         "alert_handler",
         "ast",
         "sram_ctrl_ret_aon__ram",
@@ -293,6 +291,7 @@ tl_host_t xbar_hosts[$] = '{
         "otp_ctrl__core",
         "otp_ctrl__prim",
         "lc_ctrl__regs",
+        "sensor_ctrl",
         "alert_handler",
         "ast",
         "sram_ctrl_ret_aon__ram",
@@ -348,6 +347,7 @@ tl_host_t xbar_hosts[$] = '{
         "otp_ctrl__core",
         "otp_ctrl__prim",
         "lc_ctrl__regs",
+        "sensor_ctrl",
         "alert_handler",
         "ast",
         "sram_ctrl_ret_aon__ram",

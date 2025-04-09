@@ -45,14 +45,6 @@ def get_virtual_memory_size(top):
             for _, mem in mod["memory"].items():
                 if mem["label"] == "eflash":
                     return hex(int(mem["size"], 0) // 2)
-    # if no flash_ctrl is present, but a ctn memory region is,
-    # use that size instead
-    for mod in top["module"]:
-        if "memory" in mod:
-            for _, mem in mod["memory"].items():
-                if mem["label"] == "ctn":
-                    return hex(0x00100000 // 2)
-
     return None
 %>\
 
@@ -65,14 +57,12 @@ MEMORY {
 % for m in top["module"]:
   % if "memory" in m:
     % for key, mem in m["memory"].items():
-      % if addr_space in m["base_addrs"][key]:
-  ${mem["label"]}(${flags(mem)}) : ORIGIN = ${m["base_addrs"][key][addr_space]}, LENGTH = ${mem["size"]}
-      % endif
+  ${mem["label"]}(${flags(mem)}) : ORIGIN = ${m["base_addrs"][key][helper.addr_space]}, LENGTH = ${mem["size"]}
     % endfor
   % endif
 % endfor
 % for m in top["memory"]:
-  ${m["name"]}(${memory_to_flags(m)}) : ORIGIN = ${m["base_addr"][addr_space]}, LENGTH = ${m["size"]}
+  ${m["name"]}(${memory_to_flags(m)}) : ORIGIN = ${m["base_addr"][helper.addr_space]}, LENGTH = ${m["size"]}
 % endfor
   rom_ext_virtual(rx) : ORIGIN = 0x90000000, LENGTH = ${get_virtual_memory_size(top)}
   owner_virtual(rx) : ORIGIN = 0xa0000000, LENGTH = ${get_virtual_memory_size(top)}
@@ -119,6 +109,6 @@ _${mem["label"]}_chip_info_start = _${mem["label"]}_chip_info_end - _chip_info_s
  * large enough to cover the .crt section.
  *
  * NOTE: This value must match the size of the RX region in
- * hw/${top['name']}/rtl/ibex_pmp_reset_pkg.sv.
+ * hw/ip/rv_core_ibex/rtl/ibex_pmp_reset.svh.
  */
 _epmp_reset_rx_size = 2048;

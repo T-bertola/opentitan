@@ -39,6 +39,7 @@
     {clock: "clk_main_i"},
     {clock: "clk_io_i"},
     {clock: "clk_io_div2_i"},
+    {clock: "clk_usb_i"},
     {clock: "clk_por_i", reset: "rst_por_ni"},
   ]
   bus_interfaces: [
@@ -232,7 +233,7 @@
       type:    "uni",
       name:    "alert_dump",
       act:     "rcv",
-      package: "alert_handler_pkg",
+      package: "alert_pkg",
       desc:    '''
         Alert handler crash dump information.
       '''
@@ -326,7 +327,7 @@
           desc: '''
             Indicates when a device has reset due to a hardware requested reset.
             The bit mapping is as follows:
-            b3: aon_timer_aon: watchdog reset request
+            b3: aon_timer_aon: watchdog reset requestt
             b4: soc_proxy: External reset request
             b5: pwrmgr_aon: main power glitch reset request
             b6: alert_handler: escalation reset request

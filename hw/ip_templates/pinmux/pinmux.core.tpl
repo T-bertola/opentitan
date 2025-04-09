@@ -4,6 +4,8 @@ CAPI=2:
 # SPDX-License-Identifier: Apache-2.0
 name: ${instance_vlnv("lowrisc:ip:pinmux:0.1")}
 description: "Pin Multiplexer"
+virtual:
+  - lowrisc:ip_interfaces:pinmux
 
 filesets:
   files_rtl:
@@ -19,11 +21,9 @@ filesets:
       - lowrisc:prim:pad_wrapper_pkg
       - lowrisc:prim:pad_attr
       - lowrisc:ip:jtag_pkg
-    % if enable_usb_wakeup:
       - lowrisc:ip:usbdev
-    % endif
       - ${instance_vlnv("lowrisc:ip:pinmux_reg:0.1")}
-      - ${instance_vlnv("lowrisc:ip:pinmux_pkg:0.1")}
+      - lowrisc:ip_interfaces:pinmux_pkg
     files:
       - rtl/pinmux_wkup.sv
       - rtl/pinmux_jtag_buf.sv

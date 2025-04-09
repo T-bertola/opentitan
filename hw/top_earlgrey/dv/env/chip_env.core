@@ -2,11 +2,8 @@ CAPI=2:
 # Copyright lowRISC contributors (OpenTitan project).
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
-name: "lowrisc:dv:top_earlgrey_chip_env:0.1"
+name: "lowrisc:dv:chip_env:0.1"
 description: "CHIP DV UVM environmnt"
-virtual:
-  - lowrisc:dv:chip_env
-
 filesets:
   files_dv:
     depend:
@@ -23,8 +20,7 @@ filesets:
       - lowrisc:dv:jtag_riscv_agent
       - lowrisc:dv:jtag_dmi_agent
       - lowrisc:dv:lc_ctrl_dv_utils
-      - lowrisc:earlgrey_dv:flash_ctrl_bkdr_util
-      - lowrisc:earlgrey_dv:otp_ctrl_mem_bkdr_util
+      - lowrisc:dv:mem_bkdr_util
       - lowrisc:dv:ralgen
       - lowrisc:dv:spi_agent
       - lowrisc:dv:spi_host_sva
@@ -36,10 +32,10 @@ filesets:
       - lowrisc:dv:i2c_agent
       - lowrisc:dv:pattgen_agent
       - lowrisc:ip:otp_ctrl_pkg
-      - lowrisc:earlgrey_ip:pwrmgr_pkg
+      - lowrisc:ip_interfaces:pwrmgr_pkg
       - lowrisc:dv:lc_ctrl_dv_utils
-      - "!fileset_partner ? (lowrisc:systems:top_earlgrey_ast_pkg)"
-      - "fileset_partner ? (partner:systems:top_earlgrey_ast_pkg)"
+      - "!fileset_partner ? (lowrisc:systems:ast_pkg)"
+      - "fileset_partner ? (partner:systems:ast_pkg)"
     files:
       - chip_common_pkg.sv
       - chip_if.sv

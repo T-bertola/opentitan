@@ -10,7 +10,6 @@ use std::convert::TryFrom;
 use std::io::{Read, Write};
 
 use super::misc::{KeyMaterial, OwnershipKeyAlg, TlvHeader, TlvTag};
-use super::GlobalFlags;
 use super::{OwnerApplicationKey, OwnerFlashConfig, OwnerFlashInfoConfig, OwnerRescueConfig};
 use crate::crypto::ecdsa::{EcdsaPrivateKey, EcdsaRawSignature};
 use crate::with_unknown;
@@ -21,55 +20,25 @@ with_unknown! {
         Disabled = u32::from_le_bytes(*b"NOEX"),
         Enabled = u32::from_le_bytes(*b"EXEC"),
     }
-
-    pub enum MinSecurityVersion: u32 [default = Self::NoChange] {
-        NoChange = 0xFFFFFFFFu32,
-    }
-
-    pub enum OwnershipUpdateMode: u32 [default = Self::Open] {
-        Open = u32::from_le_bytes(*b"OPEN"),
-        UnlockSelf = u32::from_le_bytes(*b"SELF"),
-        SelfVersion = u32::from_le_bytes(*b"SELV"),
-        NewVersion = u32::from_le_bytes(*b"NEWV"),
-    }
 }
 
 /// Describes the owner configuration and key material.
 #[derive(Debug, Serialize, Deserialize, Annotate)]
 pub struct OwnerBlock {
     /// Header identifying this struct.
-    #[serde(
-        skip_serializing_if = "GlobalFlags::not_debug",
-        default = "OwnerBlock::default_header"
-    )]
-    pub header: TlvHeader,
-    /// Configuraion version (monotonically increasing per owner).
     #[serde(default)]
-    pub config_version: u32,
+    pub header: TlvHeader,
+    /// Version of this structure (ie: currently, zero).
+    #[serde(default)]
+    pub version: u32,
     /// Whether the owner wants to permit code execution in SRAM.
     #[serde(default)]
     pub sram_exec: SramExecMode,
     /// The key algorithm of the ownership keys.
     pub ownership_key_alg: OwnershipKeyAlg,
-    /// Ownership update mode.
     #[serde(default)]
-    pub update_mode: OwnershipUpdateMode,
-    /// Set the minimum security version to this value.
-    #[serde(default)]
-    pub min_security_version_bl0: MinSecurityVersion,
-    /// The device ID locking constraint.
-    #[serde(default)]
-    pub lock_constraint: u32,
-    /// The device ID to which this config applies.
-    #[serde(
-        default = "OwnerBlock::default_constraint",
-        skip_serializing_if = "OwnerBlock::is_default_constraint"
-    )]
     #[annotate(format=hex)]
-    pub device_id: [u32; 8],
-    #[serde(default, skip_serializing_if = "GlobalFlags::not_debug")]
-    #[annotate(format=hex)]
-    pub reserved: [u32; 16],
+    pub reserved: [u32; 3],
     /// The owner identity key.
     pub owner_key: KeyMaterial,
     /// The owner activation key.
@@ -92,36 +61,28 @@ pub struct OwnerBlock {
 impl Default for OwnerBlock {
     fn default() -> Self {
         Self {
-            header: Self::default_header(),
-            config_version: 0,
+            header: TlvHeader::new(TlvTag::Owner, 0),
+            version: 0,
             sram_exec: SramExecMode::default(),
             ownership_key_alg: OwnershipKeyAlg::default(),
-            update_mode: OwnershipUpdateMode::default(),
-            min_security_version_bl0: MinSecurityVersion::default(),
-            lock_constraint: 0,
-            device_id: Self::default_constraint(),
-            reserved: [0u32; 16],
+            reserved: [0u32; 3],
             owner_key: KeyMaterial::default(),
             activate_key: KeyMaterial::default(),
             unlock_key: KeyMaterial::default(),
             data: Vec::new(),
             signature: EcdsaRawSignature::default(),
-            seal: Vec::new(),
+            seal: vec![0xffu8; 32],
         }
     }
 }
 
 impl OwnerBlock {
-    pub const SIZE: usize = 2048;
-    pub const DATA_SIZE: usize = 1536;
-    pub const SIGNATURE_OFFSET: usize = 1952;
+    const SIZE: usize = 2048;
+    const DATA_SIZE: usize = 1728;
+    const SIGNATURE_OFFSET: usize = 1952;
     // The not present value must be reflected in the TlvTag::NotPresent value.
     const NOT_PRESENT: u8 = 0x5a;
-    const NO_CONSTRAINT: u32 = 0x7e7e7e7e;
 
-    pub fn default_header() -> TlvHeader {
-        TlvHeader::new(TlvTag::Owner, 0, "0.0")
-    }
     pub fn basic() -> Self {
         Self {
             data: vec![
@@ -135,28 +96,17 @@ impl OwnerBlock {
     }
 
     pub fn write(&self, dest: &mut impl Write) -> Result<()> {
-        let header = TlvHeader::new(TlvTag::Owner, Self::SIZE, "0.0");
+        let header = TlvHeader::new(TlvTag::Owner, Self::SIZE);
         header.write(dest)?;
-        dest.write_u32::<LittleEndian>(self.config_version)?;
+        dest.write_u32::<LittleEndian>(self.version)?;
         dest.write_u32::<LittleEndian>(u32::from(self.sram_exec))?;
         dest.write_u32::<LittleEndian>(u32::from(self.ownership_key_alg))?;
-        dest.write_u32::<LittleEndian>(u32::from(self.update_mode))?;
-        dest.write_u32::<LittleEndian>(u32::from(self.min_security_version_bl0))?;
-        dest.write_u32::<LittleEndian>(self.lock_constraint)?;
-
-        for (i, x) in self.device_id.iter().enumerate() {
-            if self.lock_constraint & (1u32 << i) == 0 {
-                dest.write_u32::<LittleEndian>(Self::NO_CONSTRAINT)?;
-            } else {
-                dest.write_u32::<LittleEndian>(*x)?;
-            }
-        }
         for x in &self.reserved {
             dest.write_u32::<LittleEndian>(*x)?;
         }
-        self.owner_key.write_length(dest, 96)?;
-        self.activate_key.write_length(dest, 96)?;
-        self.unlock_key.write_length(dest, 96)?;
+        self.owner_key.write_length(dest, 64)?;
+        self.activate_key.write_length(dest, 64)?;
+        self.unlock_key.write_length(dest, 64)?;
         let mut data = Vec::new();
         for item in &self.data {
             item.write(&mut data)?;
@@ -164,29 +114,19 @@ impl OwnerBlock {
         data.resize(Self::DATA_SIZE, Self::NOT_PRESENT);
         dest.write_all(&data)?;
         self.signature.write(dest)?;
-        if self.seal.is_empty() {
-            dest.write_all(&[0u8; 32])?;
-        } else {
-            dest.write_all(&self.seal)?;
-        }
+        dest.write_all(&self.seal)?;
         Ok(())
     }
 
     pub fn read(src: &mut impl Read, header: TlvHeader) -> Result<Self> {
-        let config_version = src.read_u32::<LittleEndian>()?;
+        let version = src.read_u32::<LittleEndian>()?;
         let sram_exec = SramExecMode(src.read_u32::<LittleEndian>()?);
         let ownership_key_alg = OwnershipKeyAlg(src.read_u32::<LittleEndian>()?);
-        let update_mode = OwnershipUpdateMode(src.read_u32::<LittleEndian>()?);
-        let min_security_version_bl0 = MinSecurityVersion(src.read_u32::<LittleEndian>()?);
-        let lock_constraint = src.read_u32::<LittleEndian>()?;
-
-        let mut device_id = [0u32; 8];
-        src.read_u32_into::<LittleEndian>(&mut device_id)?;
-        let mut reserved = [0u32; 16];
+        let mut reserved = [0u32; 3];
         src.read_u32_into::<LittleEndian>(&mut reserved)?;
-        let owner_key = KeyMaterial::read_length(src, ownership_key_alg, 96)?;
-        let activate_key = KeyMaterial::read_length(src, ownership_key_alg, 96)?;
-        let unlock_key = KeyMaterial::read_length(src, ownership_key_alg, 96)?;
+        let owner_key = KeyMaterial::read_length(src, ownership_key_alg, 64)?;
+        let activate_key = KeyMaterial::read_length(src, ownership_key_alg, 64)?;
+        let unlock_key = KeyMaterial::read_length(src, ownership_key_alg, 64)?;
         let mut bytes = vec![0u8; Self::DATA_SIZE];
         src.read_exact(&mut bytes)?;
         let mut cursor = std::io::Cursor::new(&bytes);
@@ -202,13 +142,9 @@ impl OwnerBlock {
         src.read_exact(&mut seal)?;
         Ok(Self {
             header,
-            config_version,
+            version,
             sram_exec,
             ownership_key_alg,
-            update_mode,
-            min_security_version_bl0,
-            lock_constraint,
-            device_id,
             reserved,
             owner_key,
             activate_key,
@@ -224,27 +160,14 @@ impl OwnerBlock {
         self.signature = key.digest_and_sign(&data[..Self::SIGNATURE_OFFSET])?;
         Ok(())
     }
-
-    pub fn is_default_constraint(d: &[u32; 8]) -> bool {
-        *d == [Self::NO_CONSTRAINT; 8]
-    }
-
-    pub fn default_constraint() -> [u32; 8] {
-        [Self::NO_CONSTRAINT; 8]
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Annotate)]
 pub enum OwnerConfigItem {
-    #[serde(alias = "application_key")]
     ApplicationKey(OwnerApplicationKey),
-    #[serde(alias = "flash_info_config")]
     FlashInfoConfig(OwnerFlashInfoConfig),
-    #[serde(alias = "flash_config")]
     FlashConfig(OwnerFlashConfig),
-    #[serde(alias = "rescue_config")]
     RescueConfig(OwnerRescueConfig),
-    #[serde(alias = "raw")]
     Raw(
         #[serde(with = "serde_bytes")]
         #[annotate(format = hexdump)]
@@ -304,47 +227,47 @@ mod test {
     #[rustfmt::skip]
     const OWNER_BIN: &str =
 r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
-00000010: 50 32 35 36 4f 50 45 4e ff ff ff ff 00 00 00 00  P256OPEN........
-00000020: 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e  ~~~~~~~~~~~~~~~~
-00000030: 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e 7e  ~~~~~~~~~~~~~~~~
-00000040: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-00000050: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-00000060: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-00000070: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-00000080: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11  ................
-00000090: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11  ................
-000000a0: 21 21 21 21 21 21 21 21 21 21 21 21 21 21 21 21  !!!!!!!!!!!!!!!!
-000000b0: 21 21 21 21 21 21 21 21 21 21 21 21 21 21 21 21  !!!!!!!!!!!!!!!!
-000000c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-000000d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-000000e0: 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33  3333333333333333
-000000f0: 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33  3333333333333333
-00000100: 44 44 44 44 44 44 44 44 44 44 44 44 44 44 44 44  DDDDDDDDDDDDDDDD
-00000110: 44 44 44 44 44 44 44 44 44 44 44 44 44 44 44 44  DDDDDDDDDDDDDDDD
-00000120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-00000130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-00000140: 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55  UUUUUUUUUUUUUUUU
-00000150: 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55  UUUUUUUUUUUUUUUU
-00000160: 66 66 66 66 66 66 66 66 66 66 66 66 66 66 66 66  ffffffffffffffff
-00000170: 66 66 66 66 66 66 66 66 66 66 66 66 66 66 66 66  ffffffffffffffff
-00000180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-00000190: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-000001a0: 41 50 50 4b 70 00 00 00 50 32 35 36 70 72 6f 64  APPKp...P256prod
-000001b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-000001c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
-000001d0: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa  ................
-000001e0: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa  ................
-000001f0: bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb  ................
-00000200: bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb  ................
-00000210: 46 4c 53 48 20 00 00 00 00 00 00 01 66 06 00 99  FLSH .......f...
-00000220: 66 06 00 00 00 01 00 02 77 17 11 88 77 17 11 11  f.......w...w...
-00000230: 49 4e 46 4f 20 00 00 00 00 01 00 00 66 06 00 99  INFO .......f...
-00000240: 66 06 00 00 01 05 00 00 77 17 11 88 77 17 11 11  f.......w...w...
-00000250: 52 45 53 51 50 00 00 00 58 4d 44 4d 20 00 e0 00  RESQP...XMDM ...
-00000260: 45 4d 50 54 4d 53 45 43 4e 45 58 54 55 4e 4c 4b  EMPTMSECNEXTUNLK
-00000270: 41 43 54 56 51 53 45 52 42 53 45 52 4f 42 45 52  ACTVQSERBSEROBER
-00000280: 47 4f 4c 42 51 45 52 42 50 53 52 42 52 4e 57 4f  GOLBQERBPSRBRNWO
-00000290: 30 47 50 4f 31 47 50 4f 44 49 54 4f 54 49 41 57  0GPO1GPODITOTIAW
+00000010: 50 32 35 36 00 00 00 00 00 00 00 00 00 00 00 00  P256............
+00000020: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11  ................
+00000030: 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11 11  ................
+00000040: 21 21 21 21 21 21 21 21 21 21 21 21 21 21 21 21  !!!!!!!!!!!!!!!!
+00000050: 21 21 21 21 21 21 21 21 21 21 21 21 21 21 21 21  !!!!!!!!!!!!!!!!
+00000060: 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33  3333333333333333
+00000070: 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33 33  3333333333333333
+00000080: 44 44 44 44 44 44 44 44 44 44 44 44 44 44 44 44  DDDDDDDDDDDDDDDD
+00000090: 44 44 44 44 44 44 44 44 44 44 44 44 44 44 44 44  DDDDDDDDDDDDDDDD
+000000a0: 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55  UUUUUUUUUUUUUUUU
+000000b0: 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55 55  UUUUUUUUUUUUUUUU
+000000c0: 66 66 66 66 66 66 66 66 66 66 66 66 66 66 66 66  ffffffffffffffff
+000000d0: 66 66 66 66 66 66 66 66 66 66 66 66 66 66 66 66  ffffffffffffffff
+000000e0: 41 50 50 4b 70 00 00 00 50 32 35 36 70 72 6f 64  APPKp...P256prod
+000000f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+00000100: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+00000110: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa  ................
+00000120: aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa aa  ................
+00000130: bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb  ................
+00000140: bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb bb  ................
+00000150: 46 4c 53 48 20 00 00 00 00 00 00 01 66 06 00 99  FLSH .......f...
+00000160: 66 06 00 00 00 01 00 02 77 17 11 88 77 17 11 11  f.......w...w...
+00000170: 49 4e 46 4f 20 00 00 00 00 01 00 00 66 06 00 99  INFO .......f...
+00000180: 66 06 00 00 01 05 00 00 77 17 11 88 77 17 11 11  f.......w...w...
+00000190: 52 45 53 51 38 00 00 00 58 4d 44 4d 20 00 e0 00  RESQ8...XMDM ...
+000001a0: 45 4d 50 54 4d 53 45 43 4e 45 58 54 55 4e 4c 4b  EMPTMSECNEXTUNLK
+000001b0: 41 43 54 56 51 53 45 52 47 4f 4c 42 51 45 52 42  ACTVQSERGOLBQERB
+000001c0: 50 53 52 42 52 4e 57 4f 5a 5a 5a 5a 5a 5a 5a 5a  PSRBRNWOZZZZZZZZ
+000001d0: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+000001e0: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+000001f0: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000200: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000210: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000220: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000230: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000240: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000250: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000260: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000270: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000280: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
+00000290: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
 000002a0: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
 000002b0: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
 000002c0: 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a 5a  ZZZZZZZZZZZZZZZZ
@@ -434,12 +357,18 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
 "#;
 
     const OWNER_JSON: &str = r#"{
-  config_version: 0,
+  header: {
+    identifier: "Owner",
+    length: 2048
+  },
+  version: 0,
   sram_exec: "DisabledLocked",
   ownership_key_alg: "EcdsaP256",
-  update_mode: "Open",
-  min_security_version_bl0: "NoChange",
-  lock_constraint: 0,
+  reserved: [
+    0x0,
+    0x0,
+    0x0
+  ],
   owner_key: {
     Ecdsa: {
       x: "1111111111111111111111111111111111111111111111111111111111111111",
@@ -461,6 +390,10 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
   data: [
     {
       ApplicationKey: {
+        header: {
+          identifier: "ApplicationKey",
+          length: 112
+        },
         key_alg: "EcdsaP256",
         key_domain: "Prod",
         key_diversifier: [
@@ -483,6 +416,10 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
     },
     {
       FlashConfig: {
+        header: {
+          identifier: "FlashConfig",
+          length: 32
+        },
         config: [
           {
             start: 0,
@@ -493,7 +430,7 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
             scramble: true,
             ecc: true,
             high_endurance: true,
-            protect_when_active: false,
+            protect_when_primary: false,
             lock: false
           },
           {
@@ -505,7 +442,7 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
             scramble: true,
             ecc: true,
             high_endurance: true,
-            protect_when_active: false,
+            protect_when_primary: false,
             lock: false
           }
         ]
@@ -513,6 +450,10 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
     },
     {
       FlashInfoConfig: {
+        header: {
+          identifier: "FlashInfoConfig",
+          length: 32
+        },
         config: [
           {
             bank: 0,
@@ -524,7 +465,7 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
             scramble: true,
             ecc: true,
             high_endurance: true,
-            protect_when_active: false,
+            protect_when_primary: false,
             lock: false
           },
           {
@@ -537,7 +478,7 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
             scramble: true,
             ecc: true,
             high_endurance: true,
-            protect_when_active: false,
+            protect_when_primary: false,
             lock: false
           }
         ]
@@ -545,6 +486,10 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
     },
     {
       RescueConfig: {
+        header: {
+          identifier: "Rescue",
+          length: 56
+        },
         rescue_type: "Xmodem",
         start: 32,
         size: 224,
@@ -555,16 +500,10 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
           "OwnershipUnlockRequest",
           "OwnershipActivateRequest",
           "Rescue",
-          "RescueB",
-          "Reboot",
           "GetBootLog",
           "BootSvcReq",
           "BootSvcRsp",
-          "OwnerBlock",
-          "GetOwnerPage0",
-          "GetOwnerPage1",
-          "GetDeviceId",
-          "Wait"
+          "OwnerBlock"
         ]
       }
     }
@@ -579,7 +518,7 @@ r#"00000000: 4f 57 4e 52 00 08 00 00 00 00 00 00 4c 4e 45 58  OWNR........LNEX
     #[test]
     fn test_owner_write() -> Result<()> {
         let own = OwnerBlock {
-            config_version: 0,
+            version: 0,
             sram_exec: SramExecMode::default(),
             ownership_key_alg: OwnershipKeyAlg::EcdsaP256,
             owner_key: KeyMaterial::Ecdsa(EcdsaRawPublicKey {

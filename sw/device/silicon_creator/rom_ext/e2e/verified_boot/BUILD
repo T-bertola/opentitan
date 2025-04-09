@@ -4,7 +4,6 @@
 
 load(
     "//rules/opentitan:defs.bzl",
-    "CLEAR_KEY_SET",
     "DEFAULT_TEST_FAILURE_MSG",
     "DEFAULT_TEST_SUCCESS_MSG",
     "EARLGREY_TEST_ENVS",
@@ -23,9 +22,8 @@ load(
     "otp_partition",
 )
 load(
-    "//sw/device/silicon_creator/rom_ext/imm_section:defs.bzl",
-    "IMMUTABLE_HASH_UNENFORCED_MSG",
-    "IMM_SECTION_VARIATIONS",
+    "//sw/device/silicon_creator/imm_rom_ext:defs.bzl",
+    "IMM_ROM_EXT_TARGETS",
 )
 
 package(default_visibility = ["//visibility:public"])
@@ -50,21 +48,21 @@ filegroup(
         rom_ext = "//sw/device/silicon_creator/rom_ext:rom_ext_with_{}_imm_slot_virtual".format(name),
         visibility = ["//visibility:private"],
     )
-    for name in IMM_SECTION_VARIATIONS
+    for name in IMM_ROM_EXT_TARGETS
 ]
 
 [
     otp_image(
         name = "otp_img_with_{}_imm_romext_enabled".format(name),
         testonly = True,
-        src = "//hw/top_earlgrey/data/otp:otp_json_prod",
+        src = "//hw/ip/otp_ctrl/data:otp_json_prod",
         overlays = STD_OTP_OVERLAYS + [
             "//sw/device/silicon_creator/rom_ext/e2e:otp_json_secret2_locked",
             ":otp_json_with_{}_imm_romext_enabled".format(name),
         ],
         visibility = ["//visibility:private"],
     )
-    for name in IMM_SECTION_VARIATIONS
+    for name in IMM_ROM_EXT_TARGETS
 ]
 
 _POSITIONS = {
@@ -139,10 +137,9 @@ _POSITIONS = {
         "linker_script": "//sw/device/lib/testing/test_framework:ottf_ld_silicon_owner_slot_a",
         "owner_offset": "0x10000",
         "success": "rom_ext_slot = AA__\r\n",
-        "failure": IMMUTABLE_HASH_UNENFORCED_MSG,
         "otp_img": ":otp_img_with_{}_imm_romext_enabled".format(name),
     }
-    for name in IMM_SECTION_VARIATIONS
+    for name in IMM_ROM_EXT_TARGETS
 }
 
 [
@@ -158,7 +155,6 @@ _POSITIONS = {
             binaries = {
                 position["romext"]: "romext",
             },
-            exit_failure = position.get("failure", DEFAULT_TEST_FAILURE_MSG),
             exit_success = position["success"],
             otp = position["otp_img"],
             owner_offset = position["owner_offset"],
@@ -212,23 +208,23 @@ opentitan_test(
 )
 
 _KEYS = {
-    "dev": {
-        "key": {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_dev_ecdsa": "dev_key_0"},
-        "exit_success": DEFAULT_TEST_SUCCESS_MSG,
-        "exit_failure": DEFAULT_TEST_FAILURE_MSG,
-    },
     "prod": {
-        "key": {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa": "prod_key_0"},
+        "key": {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_prod_private_key_0": "prod_key_0"},
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
         "exit_failure": DEFAULT_TEST_FAILURE_MSG,
     },
     "test": {
-        "key": {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_test_ecdsa": "test_key_0"},
+        "key": {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_test_private_key_0": "test_key_0"},
+        "exit_success": DEFAULT_TEST_SUCCESS_MSG,
+        "exit_failure": DEFAULT_TEST_FAILURE_MSG,
+    },
+    "dev": {
+        "key": {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_dev_private_key_0": "dev_key_0"},
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
         "exit_failure": DEFAULT_TEST_FAILURE_MSG,
     },
     "unauthorized": {
-        "key": {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_unauthorized_ecdsa": "unauthorized_key_0"},
+        "key": {"//sw/device/silicon_creator/rom/keys/unauthorized/rsa:unauthorized_private_key_0": "unauthorized_key_0"},
         "exit_success": DEFAULT_TEST_FAILURE_MSG,
         "exit_failure": DEFAULT_TEST_SUCCESS_MSG,
     },
@@ -238,7 +234,6 @@ _KEYS = {
     opentitan_test(
         name = "key_{}".format(name),
         srcs = [":boot_test"],
-        ecdsa_key = keyinfo["key"],
         exec_env = {
             "//hw/top_earlgrey:fpga_cw340_rom_ext": None,
             "//hw/top_earlgrey:fpga_hyper310_rom_ext": None,
@@ -247,6 +242,7 @@ _KEYS = {
             exit_failure = keyinfo["exit_failure"],
             exit_success = keyinfo["exit_success"],
         ),
+        rsa_key = keyinfo["key"],
         deps = [
             "//sw/device/lib/base:status",
             "//sw/device/lib/testing/test_framework:ottf_main",

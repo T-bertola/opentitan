@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 load(
-    "//rules:manifest.bzl",
-    "manifest",
+    "//rules:autogen.bzl",
+    "autogen_hjson_c_header",
+    "autogen_hjson_rust_header",
 )
 load(
     "//rules/opentitan:defs.bzl",
+    "CLEAR_KEY_SET",
     "DEFAULT_TEST_FAILURE_MSG",
     "DEFAULT_TEST_SUCCESS_MSG",
     "fpga_cw305",
@@ -15,30 +17,48 @@ load(
     "fpga_cw340",
     "silicon",
     "sim_dv",
-    "sim_qemu",
     "sim_verilator",
 )
-load("//rules/opentitan:qemu.bzl", "qemu_cfg", "qemu_flash", "qemu_otp")
 
 package(default_visibility = ["//visibility:public"])
 
-filegroup(
-    name = "rtl_files",
-    srcs = glob(["**"]) + [
-        "//hw/top_earlgrey/data:all_files",
-        "//hw/top_earlgrey/dv/verilator:all_files",
-        "//hw/top_earlgrey/ip:rtl_files",
-        "//hw/top_earlgrey/sw:all_files",
+autogen_hjson_c_header(
+    name = "rv_plic_c_regs",
+    srcs = [
+        "//hw/top_earlgrey/ip_autogen/rv_plic:data/rv_plic.hjson",
     ],
 )
 
-# The following definition is used to define a null manifest in the signing
-# configuration for execution environments (exec_env) and opentitan_test
-# and opentitan_binary rules. When building the binaries, if the manifest equals
-# to this null manifest, then the signing will be skipped.
-CLEAR_MANIFEST = manifest(d = {
-    "name": "none_manifest",
-})
+autogen_hjson_rust_header(
+    name = "rv_plic_rust_regs",
+    srcs = [
+        "//hw/top_earlgrey/ip_autogen/rv_plic:data/rv_plic.hjson",
+    ],
+)
+
+autogen_hjson_c_header(
+    name = "alert_handler_c_regs",
+    srcs = [
+        "//hw/top_earlgrey/ip_autogen/alert_handler:data/alert_handler.hjson",
+    ],
+)
+
+autogen_hjson_rust_header(
+    name = "alert_handler_rust_regs",
+    srcs = [
+        "//hw/top_earlgrey/ip_autogen/alert_handler:data/alert_handler.hjson",
+    ],
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**"]) + [
+        "//hw/top_earlgrey/data:all_files",
+        "//hw/top_earlgrey/dv/verilator:all_files",
+        "//hw/top_earlgrey/ip:all_files",
+        "//hw/top_earlgrey/sw:all_files",
+    ],
+)
 
 ###########################################################################
 # FPGA CW310 Environments
@@ -50,10 +70,9 @@ fpga_cw310(
     libs = [
         "//sw/device/lib/arch:boot_stage_rom_ext",
         "//sw/device/lib/arch:fpga_cw310",
-        "//hw/top_earlgrey/sw/dt:fpga_cw310",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
-    rom_scramble_config = "//hw/top_earlgrey/data/autogen:top_earlgrey.gen.hjson",
+    rom_scramble_config = "//hw/top_earlgrey/data:autogen/top_earlgrey.gen.hjson",
     test_cmd = "testing-not-supported",
 )
 
@@ -73,7 +92,7 @@ fpga_cw310(
     exec_env = "fpga_cw310_test_rom",
     mmi = "//hw/bitstream:cw310_mmi",
     openocd_adapter_config = "//third_party/openocd:jtag_olimex_cfg",
-    otp = "//hw/top_earlgrey/data/otp:img_rma",
+    otp = "//hw/ip/otp_ctrl/data:img_rma",
     param = {
         "interface": "cw310",
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
@@ -99,40 +118,15 @@ fpga_cw310(
     rom = "//sw/device/silicon_creator/rom:mask_rom",
 )
 
-sim_qemu(
-    name = "sim_qemu_base",
-    design = "earlgrey",
-    exec_env = "sim_qemu_base",
-    libs = [
-        "//sw/device/lib/arch:boot_stage_rom_ext",
-        "//sw/device/lib/arch:sim_qemu",
-        "//hw/top_earlgrey/sw/dt:sim_qemu",
-    ],
-    linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
-    otp = "//hw/top_earlgrey/data/otp:img_rma",
-    rom_scramble_config = "//hw/top_earlgrey/data/autogen:top_earlgrey.gen.hjson",
-)
-
-sim_qemu(
-    name = "sim_qemu_rom_with_fake_keys",
-    testonly = True,
-    base = ":sim_qemu_base",
-    ecdsa_key = {"//sw/device/silicon_creator/rom/keys/fake/ecdsa:test_key_0_ecdsa_p256": "test_key_0"},
-    exec_env = "sim_qemu_rom_with_fake_keys",
-    manifest = "//sw/device/silicon_creator/rom_ext:manifest",
-    rom = "//sw/device/silicon_creator/rom:mask_rom",
-)
-
 fpga_cw310(
     name = "fpga_cw310_rom_ext",
     testonly = True,
     base = ":fpga_cw310_test_rom",
-    ecdsa_key = {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa": "prod_key_0"},
+    ecdsa_key = CLEAR_KEY_SET,
     exec_env = "fpga_cw310_rom_ext",
     libs = [
         "//sw/device/lib/arch:boot_stage_owner",
         "//sw/device/lib/arch:fpga_cw310",
-        "//hw/top_earlgrey/sw/dt:fpga_cw310",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_owner_slot_a",
     manifest = "//sw/device/silicon_owner:manifest",
@@ -145,6 +139,7 @@ fpga_cw310(
     },
     rom = "//sw/device/silicon_creator/rom:mask_rom",
     rom_ext = "//sw/device/silicon_creator/rom_ext:rom_ext_slot_a",
+    rsa_key = {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_test_private_key_0": "test_key_0"},
 )
 
 fpga_cw310(
@@ -161,7 +156,7 @@ fpga_cw310(
     exec_env = "fpga_hyper310_rom_with_fake_keys",
     manifest = "//sw/device/silicon_creator/rom_ext:manifest",
     mmi = "//hw/bitstream/hyperdebug:mmi",
-    otp = "//hw/top_earlgrey/data/otp:img_rma",
+    otp = "//hw/ip/otp_ctrl/data:img_rma",
     param = {
         "interface": "hyper310",
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
@@ -181,12 +176,11 @@ fpga_cw310(
     name = "fpga_hyper310_rom_ext",
     testonly = True,
     base = ":fpga_hyper310_rom_with_fake_keys",
-    ecdsa_key = {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa": "prod_key_0"},
+    ecdsa_key = CLEAR_KEY_SET,
     exec_env = "fpga_hyper310_rom_ext",
     libs = [
         "//sw/device/lib/arch:boot_stage_owner",
         "//sw/device/lib/arch:fpga_cw310",
-        "//hw/top_earlgrey/sw/dt:fpga_cw310",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_owner_slot_a",
     manifest = "//sw/device/silicon_owner:manifest",
@@ -198,6 +192,7 @@ fpga_cw310(
         "assemble": "{rom_ext}@0 {firmware}@0x10000",
     },
     rom_ext = "//sw/device/silicon_creator/rom_ext:rom_ext_slot_a",
+    rsa_key = {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_test_private_key_0": "test_key_0"},
 )
 
 # FPGA configuration used to emulate silicon targets. This rule can be used by
@@ -215,7 +210,7 @@ fpga_cw310(
     # binary.
     ecdsa_key = {"//sw/device/silicon_creator/rom/keys/fake/ecdsa:prod_key_0_ecdsa_p256": "prod_key_0"},
     exec_env = "fpga_cw310_sival",
-    otp = "//hw/top_earlgrey/data/otp/sival_skus:otp_img_prod_manuf_personalized",
+    otp = "//hw/ip/otp_ctrl/data/earlgrey_skus/sival:otp_img_prod_manuf_personalized",
     spx_key = {"//sw/device/silicon_creator/rom/keys/fake/spx:prod_key_0_spx": "prod_key_0"},
     tags = ["cw310_sival"],
 )
@@ -228,15 +223,15 @@ fpga_cw310(
     name = "fpga_cw310_sival_rom_ext",
     testonly = True,
     base = ":fpga_hyper310_rom_ext",
-    ecdsa_key = {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa": "prod_key_0"},
+    ecdsa_key = CLEAR_KEY_SET,
     exec_env = "fpga_cw310_sival_rom_ext",
     libs = [
         "//sw/device/lib/arch:boot_stage_owner",
         "//sw/device/lib/arch:fpga_cw310",
-        "//hw/top_earlgrey/sw/dt:fpga_cw310",
     ],
-    otp = "//hw/top_earlgrey/data/otp/sival_skus:otp_img_prod_manuf_personalized",
+    otp = "//hw/ip/otp_ctrl/data/earlgrey_skus/sival:otp_img_prod_manuf_personalized",
     rom_ext = "//sw/device/silicon_creator/rom_ext:rom_ext_slot_a",
+    rsa_key = {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_prod_private_key_0": "prod_key_0"},
     tags = ["cw310_sival_rom_ext"],
 )
 
@@ -256,7 +251,7 @@ fpga_cw305(
         "//sw/device/lib/arch:fpga_cw305",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
-    rom_scramble_config = "//hw/top_earlgrey/data/autogen:top_earlgrey.gen.hjson",
+    rom_scramble_config = "//hw/top_earlgrey/data:autogen/top_earlgrey.gen.hjson",
     test_cmd = "testing-not-supported",
 )
 
@@ -275,24 +270,23 @@ fpga_cw340(
         "--interface={interface}",
     ] + select({
         "@//ci:lowrisc_fpga_cw340": ["--uarts=/dev/ttyACM_CW340_1,/dev/ttyACM_CW340_0"],
-        "//conditions:default": [],
- #       "//conditions:default": ["--uarts=/dev/ttyACM1,/dev/ttyACM2"],
+ #       "//conditions:default": [],
+        "//conditions:default": ["--uarts=/dev/ttyACM1,/dev/ttyACM2"],
     }),
     design = "earlgrey",
     exec_env = "fpga_cw340",
     libs = [
         "//sw/device/lib/arch:boot_stage_rom_ext",
         "//sw/device/lib/arch:fpga_cw340",
-        "//hw/top_earlgrey/sw/dt:fpga_cw340",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
     param = {
-        "interface": "hyper340",
-        #"interface": "cw340",
+        #"interface": "hyper340",
+        "interface": "cw340",
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
         "exit_failure": DEFAULT_TEST_FAILURE_MSG,
     },
-    rom_scramble_config = "//hw/top_earlgrey/data/autogen:top_earlgrey.gen.hjson",
+    rom_scramble_config = "//hw/top_earlgrey/data:autogen/top_earlgrey.gen.hjson",
     test_cmd = "testing-not-supported",
 )
 
@@ -303,7 +297,7 @@ fpga_cw340(
     base_bitstream = "//hw/bitstream/cw340:bitstream",
     exec_env = "fpga_cw340_test_rom",
     mmi = "//hw/bitstream/cw340:mmi",
-    otp = "//hw/top_earlgrey/data/otp:img_rma",
+    otp = "//hw/ip/otp_ctrl/data:img_rma",
     rom = "//sw/device/lib/testing/test_rom:test_rom",
     test_cmd = """
         --exec="transport init"
@@ -323,7 +317,7 @@ fpga_cw340(
     exec_env = "fpga_cw340_rom_with_fake_keys",
     manifest = "//sw/device/silicon_creator/rom_ext:manifest",
     mmi = "//hw/bitstream/cw340:mmi",
-    otp = "//hw/top_earlgrey/data/otp:img_rma",
+    otp = "//hw/ip/otp_ctrl/data:img_rma",
     rom = "//sw/device/silicon_creator/rom:mask_rom",
     test_cmd = """
         --exec="transport init"
@@ -338,24 +332,24 @@ fpga_cw340(
     name = "fpga_cw340_rom_ext",
     testonly = True,
     base = ":fpga_cw340_rom_with_fake_keys",
-    ecdsa_key = {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa": "prod_key_0"},
+    ecdsa_key = CLEAR_KEY_SET,
     exec_env = "fpga_cw340_rom_ext",
     libs = [
         "//sw/device/lib/arch:boot_stage_owner",
         "//sw/device/lib/arch:fpga_cw340",
-        "//hw/top_earlgrey/sw/dt:fpga_cw340",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_owner_slot_a",
     manifest = "//sw/device/silicon_owner:manifest",
     otp = "//sw/device/silicon_creator/rom_ext/e2e:otp_img_secret2_locked_rma",
     param = {
-        "interface": "hyper340",
-        #"interface": "cw340",
+        #"interface": "hyper340",
+        "interface": "cw340",
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
         "exit_failure": DEFAULT_TEST_FAILURE_MSG,
         "assemble": "{rom_ext}@0 {firmware}@0x10000",
     },
     rom_ext = "//sw/device/silicon_creator/rom_ext:rom_ext_slot_a",
+    rsa_key = {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_test_private_key_0": "test_key_0"},
 )
 
 # FPGA configuration used to emulate silicon targets. This rule can be used by
@@ -373,7 +367,7 @@ fpga_cw340(
     # binary.
     ecdsa_key = {"//sw/device/silicon_creator/rom/keys/fake/ecdsa:prod_key_0_ecdsa_p256": "prod_key_0"},
     exec_env = "fpga_cw340_sival",
-    otp = "//hw/top_earlgrey/data/otp/sival_skus:otp_img_prod_manuf_personalized",
+    otp = "//hw/ip/otp_ctrl/data/earlgrey_skus/sival:otp_img_prod_manuf_personalized",
     spx_key = {"//sw/device/silicon_creator/rom/keys/fake/spx:prod_key_0_spx": "prod_key_0"},
     tags = ["cw340_sival"],
 )
@@ -386,15 +380,15 @@ fpga_cw340(
     name = "fpga_cw340_sival_rom_ext",
     testonly = True,
     base = ":fpga_cw340_rom_ext",
-    ecdsa_key = {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa": "prod_key_0"},
+    ecdsa_key = CLEAR_KEY_SET,
     exec_env = "fpga_cw340_sival_rom_ext",
     libs = [
         "//sw/device/lib/arch:boot_stage_owner",
         "//sw/device/lib/arch:fpga_cw340",
-        "//hw/top_earlgrey/sw/dt:fpga_cw340",
     ],
-    otp = "//hw/top_earlgrey/data/otp/sival_skus:otp_img_prod_manuf_personalized",
+    otp = "//hw/ip/otp_ctrl/data/earlgrey_skus/sival:otp_img_prod_manuf_personalized",
     rom_ext = "//sw/device/silicon_creator/rom_ext:rom_ext_slot_a",
+    rsa_key = {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_prod_private_key_0": "prod_key_0"},
     tags = ["cw340_sival_rom_ext"],
 )
 
@@ -418,7 +412,6 @@ silicon(
     libs = [
         "//sw/device/lib/arch:boot_stage_rom_ext",
         "//sw/device/lib/arch:silicon",
-        "//hw/top_earlgrey/sw/dt:silicon",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
     manifest = "//sw/device/silicon_creator/rom_ext:manifest",
@@ -427,7 +420,7 @@ silicon(
         "exit_success": DEFAULT_TEST_SUCCESS_MSG,
         "exit_failure": DEFAULT_TEST_FAILURE_MSG,
     },
-    rom_scramble_config = "//hw/top_earlgrey/data/autogen:top_earlgrey.gen.hjson",
+    rom_scramble_config = "//hw/top_earlgrey/data:autogen/top_earlgrey.gen.hjson",
     test_cmd = """
         --exec="transport init"
         --exec="bootstrap --clear-uart=true {firmware}"
@@ -445,15 +438,13 @@ silicon(
         "--interface={interface}",
     ],
     design = "earlgrey",
-    # TODO(moidx): Switch to real keys once these have been generated.
-    ecdsa_key = {"//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa": "prod_key_0"},
+    ecdsa_key = CLEAR_KEY_SET,
     exec_env = "silicon_owner_sival_rom_ext",
     extract_sw_logs = "//util/device_sw_utils:extract_sw_logs_db",
     flash_scramble_tool = "//util/design:gen-flash-img",
     libs = [
         "//sw/device/lib/arch:boot_stage_owner",
         "//sw/device/lib/arch:silicon",
-        "//hw/top_earlgrey/sw/dt:silicon",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_owner_slot_a",
     manifest = "//sw/device/silicon_owner:manifest",
@@ -469,6 +460,10 @@ silicon(
     rom_ext = select({
         "//signing:test_keys": "//sw/device/silicon_creator/rom_ext/sival:rom_ext_fake_prod_signed_slot_a",
         "//conditions:default": "//sw/device/silicon_creator/rom_ext/sival:rom_ext_fake_prod_signed_slot_a",
+    }),
+    rsa_key = select({
+        "//signing:test_keys": {"//sw/device/silicon_creator/rom_ext/keys/fake:rom_ext_test_private_key_0": "test_key_0"},
+        "//conditions:default": {"//sw/device/silicon_creator/rom_ext/sival/keys:keyset": "earlgrey_z0_sival_1"},
     }),
     test_cmd = """
         --exec="transport init"
@@ -491,11 +486,10 @@ sim_verilator(
     libs = [
         "//sw/device/lib/arch:boot_stage_rom_ext",
         "//sw/device/lib/arch:sim_verilator",
-        "//hw/top_earlgrey/sw/dt:sim_verilator",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
-    otp = "//hw/top_earlgrey/data/otp:img_rma",
-    rom_scramble_config = "//hw/top_earlgrey/data/autogen:top_earlgrey.gen.hjson",
+    otp = "//hw/ip/otp_ctrl/data:img_rma",
+    rom_scramble_config = "//hw/top_earlgrey/data:autogen/top_earlgrey.gen.hjson",
     test_cmd = "testing-not-supported",
 )
 
@@ -552,14 +546,13 @@ sim_dv(
     libs = [
         "//sw/device/lib/arch:boot_stage_rom_ext",
         "//sw/device/lib/arch:sim_dv",
-        "//hw/top_earlgrey/sw/dt:sim_dv",
     ],
     linker_script = "//sw/device/lib/testing/test_framework:ottf_ld_silicon_creator_slot_a",
-    otp = "//hw/top_earlgrey/data/otp:img_rma",
-    otp_data_perm = "//util/design/data:data_perm",
-    otp_mmap = "//hw/top_earlgrey/data/otp:otp_ctrl_mmap.hjson",
-    otp_seed = "//util/design/data:otp_seed",
-    rom_scramble_config = "//hw/top_earlgrey/data/autogen:top_earlgrey.gen.hjson",
+    otp = "//hw/ip/otp_ctrl/data:img_rma",
+    otp_data_perm = "//hw/ip/otp_ctrl/data:data_perm",
+    otp_mmap = "//hw/ip/otp_ctrl/data:otp_ctrl_mmap.hjson",
+    otp_seed = "//hw/ip/otp_ctrl/data:otp_seed",
+    rom_scramble_config = "//hw/top_earlgrey/data:autogen/top_earlgrey.gen.hjson",
 )
 
 sim_dv(

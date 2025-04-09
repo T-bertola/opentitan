@@ -369,14 +369,10 @@ static dif_result_t issue_data_phase(const dif_spi_host_t *spi_host,
   return kDifOk;
 }
 
-dif_result_t dif_spi_host_start_transaction(const dif_spi_host_t *spi_host,
-                                            uint32_t csid,
-                                            dif_spi_host_segment_t *segments,
-                                            size_t length) {
-  if (spi_host == NULL || segments == NULL) {
-    return kDifBadArg;
-  }
-
+dif_result_t dif_spi_host_transaction(const dif_spi_host_t *spi_host,
+                                      uint32_t csid,
+                                      dif_spi_host_segment_t *segments,
+                                      size_t length) {
   // Write to chip select ID.
   mmio_region_write32(spi_host->base_addr, SPI_HOST_CSID_REG_OFFSET, csid);
 
@@ -409,15 +405,6 @@ dif_result_t dif_spi_host_start_transaction(const dif_spi_host_t *spi_host,
         return kDifBadArg;
     }
   }
-  return kDifOk;
-}
-
-dif_result_t dif_spi_host_transaction(const dif_spi_host_t *spi_host,
-                                      uint32_t csid,
-                                      dif_spi_host_segment_t *segments,
-                                      size_t length) {
-  DIF_RETURN_IF_ERROR(
-      dif_spi_host_start_transaction(spi_host, csid, segments, length));
 
   // For each segment which receives data, read from the receive FIFO.
   for (size_t i = 0; i < length; ++i) {

@@ -38,23 +38,6 @@ rust_binary(
 )
 
 rust_binary(
-    name = "usbdev_suspend",
-    srcs = [
-        "usbdev_suspend.rs",
-    ],
-    deps = [
-        ":usb",
-        "//sw/host/opentitanlib",
-        "@crate_index//:anyhow",
-        "@crate_index//:clap",
-        "@crate_index//:humantime",
-        "@crate_index//:log",
-        "@crate_index//:rusb",
-        "@crate_index//:strum",
-    ],
-)
-
-rust_binary(
     name = "usb_harness",
     srcs = [
         "usb_harness.rs",

@@ -42,35 +42,6 @@ static bool clkmgr_measure_ctrl_regwen(const dif_clkmgr_t *clkmgr) {
                              CLKMGR_MEASURE_CTRL_REGWEN_EN_BIT);
 }
 
-/**
- * Checks if the jitter enable register is locked.
- *
- * The jitter enable register is locked by CLKMGR_JITTER_REGWEN.
- */
-OT_WARN_UNUSED_RESULT
-static bool jitter_enable_register_is_locked(const dif_clkmgr_t *clkmgr) {
-  // Jitter enable register is locked when `CLKMGR_JITTER_REGWEN_EN_BIT` bit
-  // is 0.
-  return !bitfield_bit32_read(
-      mmio_region_read32(clkmgr->base_addr, CLKMGR_JITTER_REGWEN_REG_OFFSET),
-      CLKMGR_JITTER_REGWEN_EN_BIT);
-}
-
-/**
- * Checks if the external clock control register is locked.
- *
- * The external clock control register is locked by CLKMGR_EXTCLK_CTRL_REGWEN.
- */
-OT_WARN_UNUSED_RESULT
-static bool extclk_control_register_is_locked(const dif_clkmgr_t *clkmgr) {
-  // External clock control register is locked when
-  // `CLKMGR_EXTCLK_CTRL_REGWEN_EN_BIT` bit is 0.
-  return !bitfield_bit32_read(
-      mmio_region_read32(clkmgr->base_addr,
-                         CLKMGR_EXTCLK_CTRL_REGWEN_REG_OFFSET),
-      CLKMGR_EXTCLK_CTRL_REGWEN_EN_BIT);
-}
-
 dif_result_t dif_clkmgr_external_clock_is_settled(const dif_clkmgr_t *clkmgr,
                                                   bool *status) {
   if (clkmgr == NULL || status == NULL) {
@@ -85,25 +56,6 @@ dif_result_t dif_clkmgr_external_clock_is_settled(const dif_clkmgr_t *clkmgr,
   return kDifOk;
 }
 
-dif_result_t dif_clkmgr_jitter_enable_is_locked(const dif_clkmgr_t *clkmgr,
-                                                bool *is_locked) {
-  if (clkmgr == NULL || is_locked == NULL) {
-    return kDifBadArg;
-  }
-
-  *is_locked = jitter_enable_register_is_locked(clkmgr);
-
-  return kDifOk;
-}
-
-dif_result_t dif_clkmgr_lock_jitter_enable(const dif_clkmgr_t *clkmgr) {
-  if (clkmgr == NULL) {
-    return kDifBadArg;
-  }
-  mmio_region_write32(clkmgr->base_addr, CLKMGR_JITTER_REGWEN_REG_OFFSET, 0);
-  return kDifOk;
-}
-
 dif_result_t dif_clkmgr_jitter_get_enabled(const dif_clkmgr_t *clkmgr,
                                            dif_toggle_t *state) {
   if (clkmgr == NULL || state == NULL) {
@@ -114,8 +66,7 @@ dif_result_t dif_clkmgr_jitter_get_enabled(const dif_clkmgr_t *clkmgr,
       mmio_region_read32(clkmgr->base_addr, CLKMGR_JITTER_ENABLE_REG_OFFSET);
   // The documentation states that kMultiBitBool4False disables the jittery
   // clock and all other values enable the jittery clock.
-  *state = clk_jitter_val != kMultiBitBool4False ? kDifToggleEnabled
-                                                 : kDifToggleDisabled;
+  *state = clk_jitter_val != kMultiBitBool4False;
 
   return kDifOk;
 }
@@ -125,9 +76,6 @@ dif_result_t dif_clkmgr_jitter_set_enabled(const dif_clkmgr_t *clkmgr,
   multi_bit_bool_t new_jitter_enable_val;
   if (clkmgr == NULL) {
     return kDifBadArg;
-  }
-  if (jitter_enable_register_is_locked(clkmgr)) {
-    return kDifLocked;
   }
 
   switch (new_state) {
@@ -143,28 +91,6 @@ dif_result_t dif_clkmgr_jitter_set_enabled(const dif_clkmgr_t *clkmgr,
   mmio_region_write32(clkmgr->base_addr, CLKMGR_JITTER_ENABLE_REG_OFFSET,
                       new_jitter_enable_val);
   return kDifOk;
-}
-
-OT_WARN_UNUSED_RESULT
-dif_result_t dif_clkmgr_find_gateable_clock(
-    const dif_clkmgr_t *clkmgr, dt_instance_id_t inst_id,
-    dif_clkmgr_gateable_clock_t *clock) {
-  if (clkmgr == NULL || clock == NULL) {
-    return kDifBadArg;
-  }
-  dt_clkmgr_t dt;
-  dif_result_t res = dif_clkmgr_get_dt(clkmgr, &dt);
-  if (res != kDifOk) {
-    return res;
-  }
-  // Query the DT to find the information.
-  for (size_t i = 0; i < dt_clkmgr_gateable_clock_count(dt); i++) {
-    if (dt_clkmgr_gateable_clock(dt, i) == inst_id) {
-      *clock = i;
-      return kDifOk;
-    }
-  }
-  return kDifError;
 }
 
 dif_result_t dif_clkmgr_gateable_clock_get_enabled(
@@ -198,28 +124,6 @@ dif_result_t dif_clkmgr_gateable_clock_set_enabled(
                       clk_enables_val);
 
   return kDifOk;
-}
-
-OT_WARN_UNUSED_RESULT
-dif_result_t dif_clkmgr_find_hintable_clock(
-    const dif_clkmgr_t *clkmgr, dt_instance_id_t inst_id,
-    dif_clkmgr_hintable_clock_t *clock) {
-  if (clkmgr == NULL || clock == NULL) {
-    return kDifBadArg;
-  }
-  dt_clkmgr_t dt;
-  dif_result_t res = dif_clkmgr_get_dt(clkmgr, &dt);
-  if (res != kDifOk) {
-    return res;
-  }
-  // Query the DT to find the information.
-  for (size_t i = 0; i < dt_clkmgr_hintable_clock_count(dt); i++) {
-    if (dt_clkmgr_hintable_clock(dt, i) == inst_id) {
-      *clock = i;
-      return kDifOk;
-    }
-  }
-  return kDifError;
 }
 
 dif_result_t dif_clkmgr_hintable_clock_get_enabled(
@@ -268,37 +172,12 @@ dif_result_t dif_clkmgr_hintable_clock_get_hint(
   return kDifOk;
 }
 
-dif_result_t dif_clkmgr_external_clock_control_is_locked(
-    const dif_clkmgr_t *clkmgr, bool *is_locked) {
-  if (clkmgr == NULL || is_locked == NULL) {
-    return kDifBadArg;
-  }
-
-  *is_locked = extclk_control_register_is_locked(clkmgr);
-
-  return kDifOk;
-}
-
-dif_result_t dif_clkmgr_lock_external_clock_control(
-    const dif_clkmgr_t *clkmgr) {
-  if (clkmgr == NULL) {
-    return kDifBadArg;
-  }
-  mmio_region_write32(clkmgr->base_addr, CLKMGR_EXTCLK_CTRL_REGWEN_REG_OFFSET,
-                      0);
-  return kDifOk;
-}
-
 dif_result_t dif_clkmgr_external_clock_set_enabled(const dif_clkmgr_t *clkmgr,
                                                    bool is_low_speed) {
   uint32_t extclk_ctrl_reg = 0;
 
   if (clkmgr == NULL) {
     return kDifBadArg;
-  }
-
-  if (extclk_control_register_is_locked(clkmgr)) {
-    return kDifLocked;
   }
 
   extclk_ctrl_reg = bitfield_field32_write(
@@ -317,10 +196,6 @@ dif_result_t dif_clkmgr_external_clock_set_disabled(
 
   if (clkmgr == NULL) {
     return kDifBadArg;
-  }
-
-  if (extclk_control_register_is_locked(clkmgr)) {
-    return kDifLocked;
   }
 
   extclk_ctrl_reg = bitfield_field32_write(
@@ -416,16 +291,10 @@ dif_result_t dif_clkmgr_enable_measure_counts(const dif_clkmgr_t *clkmgr,
       lo_field = CLKMGR_##kind_##_MEAS_CTRL_SHADOWED_LO_FIELD;     \
       hi_field = CLKMGR_##kind_##_MEAS_CTRL_SHADOWED_HI_FIELD; break, break)
 
-#if defined(OPENTITAN_IS_EARLGREY)
     case kDifClkmgrMeasureClockIo:
       PICK_COUNT_CTRL_FIELDS(IO);
     case kDifClkmgrMeasureClockIoDiv2:
       PICK_COUNT_CTRL_FIELDS(IO_DIV2);
-#elif defined(OPENTITAN_IS_DARJEELING)
-// Darjeeling does not have Io / IoDiv2 clock measurements
-#else
-#error "dif_clkmgr does not support this top"
-#endif
     case kDifClkmgrMeasureClockIoDiv4:
       PICK_COUNT_CTRL_FIELDS(IO_DIV4);
     case kDifClkmgrMeasureClockMain:
@@ -472,18 +341,12 @@ dif_result_t dif_clkmgr_disable_measure_counts(
       en_offset = CLKMGR_##kind_##_MEAS_CTRL_EN_REG_OFFSET; \
       break, break)
 
-#if defined(OPENTITAN_IS_EARLGREY)
     case kDifClkmgrMeasureClockIo:
       PICK_EN_OFFSET(IO);
       break;
     case kDifClkmgrMeasureClockIoDiv2:
       PICK_EN_OFFSET(IO_DIV2);
       break;
-#elif defined(OPENTITAN_IS_DARJEELING)
-// Darjeeling does not have Io / IoDiv2 clock measurements
-#else
-#error "dif_clkmgr does not support this top"
-#endif
     case kDifClkmgrMeasureClockIoDiv4:
       PICK_EN_OFFSET(IO_DIV4);
       break;
@@ -516,16 +379,10 @@ dif_result_t dif_clkmgr_measure_counts_get_enable(
       en_offset = CLKMGR_##kind_##_MEAS_CTRL_EN_REG_OFFSET; \
       break, break)
 
-#if defined(OPENTITAN_IS_EARLGREY)
     case kDifClkmgrMeasureClockIo:
       PICK_EN_OFFSET(IO);
     case kDifClkmgrMeasureClockIoDiv2:
       PICK_EN_OFFSET(IO_DIV2);
-#elif defined(OPENTITAN_IS_DARJEELING)
-// Darjeeling does not have Io / IoDiv2 clock measurements
-#else
-#error "dif_clkmgr does not support this top"
-#endif
     case kDifClkmgrMeasureClockIoDiv4:
       PICK_EN_OFFSET(IO_DIV4);
     case kDifClkmgrMeasureClockMain:
@@ -559,16 +416,10 @@ dif_result_t dif_clkmgr_measure_counts_get_thresholds(
       reg_offset = CLKMGR_##kind_##_MEAS_CTRL_SHADOWED_REG_OFFSET; \
       lo_field = CLKMGR_##kind_##_MEAS_CTRL_SHADOWED_LO_FIELD;     \
       hi_field = CLKMGR_##kind_##_MEAS_CTRL_SHADOWED_HI_FIELD; break, break)
-#if defined(OPENTITAN_IS_EARLGREY)
     case kDifClkmgrMeasureClockIo:
       PICK_THRESHOLD_FIELDS(IO);
     case kDifClkmgrMeasureClockIoDiv2:
       PICK_THRESHOLD_FIELDS(IO_DIV2);
-#elif defined(OPENTITAN_IS_DARJEELING)
-// Darjeeling does not have Io / IoDiv2 clock measurements
-#else
-#error "dif_clkmgr does not support this top"
-#endif
     case kDifClkmgrMeasureClockIoDiv4:
       PICK_THRESHOLD_FIELDS(IO_DIV4);
     case kDifClkmgrMeasureClockMain:

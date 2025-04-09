@@ -36,7 +36,7 @@ impl Dispatch for Generate {
         hsm: &Module,
         _session: Option<&Session>,
     ) -> Result<Box<dyn Annotate>> {
-        let spx = hsm.spx.as_ref().ok_or(HsmError::SpxUnavailable)?;
+        let acorn = hsm.acorn.as_ref().ok_or(HsmError::AcornUnavailable)?;
         let token = hsm.token.as_deref().ok_or(HsmError::SessionRequired)?;
 
         #[rustfmt::skip]
@@ -44,7 +44,7 @@ impl Dispatch for Generate {
             if self.overwrite { GenerateFlags::OVERWRITE } else { GenerateFlags::NONE }
             | if self.export.is_some() { GenerateFlags::EXPORT_PRIVATE } else { GenerateFlags::NONE };
 
-        let key = spx.generate_key(&self.label, &self.algorithm.to_string(), token, flags)?;
+        let key = acorn.generate_key(&self.label, &self.algorithm.to_string(), token, flags)?;
 
         if let Some(path) = &self.export {
             let sk = SpxSecretKey::from_bytes(self.algorithm, &key.private_key)?;
@@ -53,7 +53,7 @@ impl Dispatch for Generate {
 
         Ok(Box::new(BasicResult {
             success: true,
-            id: key.hash.map_or(AttrData::None, AttrData::Str),
+            id: AttrData::Str(key.hash.expect("key hash")),
             label: AttrData::Str(key.alias),
             value: None,
             error: None,

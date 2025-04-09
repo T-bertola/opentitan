@@ -145,7 +145,7 @@ cc_library(
     srcs = ["aes_gcm_testutils.c"],
     hdrs = ["aes_gcm_testutils.h"],
     deps = [
-        "//sw/device/lib/crypto/impl:aes_gcm",
+        "//sw/device/lib/crypto/impl:aes",
         "//sw/device/lib/crypto/impl:integrity",
         "//sw/device/lib/crypto/impl:keyblob",
         "//sw/device/lib/runtime:log",
@@ -211,7 +211,7 @@ opentitan_test(
     ),
     deps = [
         "//sw/device/lib/crypto/drivers:otbn",
-        "//sw/device/lib/crypto/impl:ecc_p256",
+        "//sw/device/lib/crypto/impl:ecc",
         "//sw/device/lib/runtime:log",
         "//sw/device/lib/testing:entropy_testutils",
         "//sw/device/lib/testing/test_framework:ottf_main",
@@ -230,7 +230,7 @@ opentitan_test(
     ),
     deps = [
         "//sw/device/lib/crypto/drivers:otbn",
-        "//sw/device/lib/crypto/impl:ecc_p384",
+        "//sw/device/lib/crypto/impl:ecc",
         "//sw/device/lib/runtime:log",
         "//sw/device/lib/testing:entropy_testutils",
         "//sw/device/lib/testing/test_framework:ottf_main",
@@ -250,7 +250,7 @@ opentitan_test(
     deps = [
         "//sw/device/lib/crypto/drivers:entropy",
         "//sw/device/lib/crypto/drivers:otbn",
-        "//sw/device/lib/crypto/impl:ecc_p256",
+        "//sw/device/lib/crypto/impl:ecc",
         "//sw/device/lib/crypto/impl:key_transport",
         "//sw/device/lib/runtime:log",
         "//sw/device/lib/testing:entropy_testutils",
@@ -272,7 +272,7 @@ opentitan_test(
     deps = [
         "//sw/device/lib/crypto/drivers:entropy",
         "//sw/device/lib/crypto/drivers:otbn",
-        "//sw/device/lib/crypto/impl:ecc_p384",
+        "//sw/device/lib/crypto/impl:ecc",
         "//sw/device/lib/crypto/impl:key_transport",
         "//sw/device/lib/runtime:log",
         "//sw/device/lib/testing:entropy_testutils",
@@ -299,7 +299,7 @@ opentitan_test(
     ),
     deps = [
         "//sw/device/lib/crypto/drivers:otbn",
-        "//sw/device/lib/crypto/impl:ecc_p256",
+        "//sw/device/lib/crypto/impl:ecc",
         "//sw/device/lib/crypto/impl:hash",
         "//sw/device/lib/crypto/impl:keyblob",
         "//sw/device/lib/crypto/include:datatypes",
@@ -330,7 +330,7 @@ opentitan_test(
     ),
     deps = [
         "//sw/device/lib/crypto/drivers:otbn",
-        "//sw/device/lib/crypto/impl:ecc_p384",
+        "//sw/device/lib/crypto/impl:ecc",
         "//sw/device/lib/crypto/impl:hash",
         "//sw/device/lib/crypto/impl:keyblob",
         "//sw/device/lib/crypto/include:datatypes",
@@ -354,7 +354,7 @@ opentitan_test(
         "//sw/device/lib/crypto/drivers:entropy",
         "//sw/device/lib/crypto/drivers:keymgr",
         "//sw/device/lib/crypto/drivers:otbn",
-        "//sw/device/lib/crypto/impl:ecc_p256",
+        "//sw/device/lib/crypto/impl:ecc",
         "//sw/device/lib/crypto/impl:hash",
         "//sw/device/lib/crypto/impl:key_transport",
         "//sw/device/lib/runtime:log",
@@ -377,7 +377,7 @@ opentitan_test(
         "//sw/device/lib/crypto/drivers:entropy",
         "//sw/device/lib/crypto/drivers:keymgr",
         "//sw/device/lib/crypto/drivers:otbn",
-        "//sw/device/lib/crypto/impl:ecc_p384",
+        "//sw/device/lib/crypto/impl:ecc",
         "//sw/device/lib/crypto/impl:hash",
         "//sw/device/lib/crypto/impl:key_transport",
         "//sw/device/lib/crypto/impl:keyblob",
@@ -468,7 +468,6 @@ opentitan_test(
         "//sw/device/lib/crypto/drivers:kmac",
         "//sw/device/lib/crypto/impl:hash",
         "//sw/device/lib/crypto/impl:kdf",
-        "//sw/device/lib/crypto/impl:key_transport",
         "//sw/device/lib/crypto/impl:mac",
         "//sw/device/lib/testing/test_framework:check",
         "//sw/device/lib/testing/test_framework:ottf_main",
@@ -516,8 +515,13 @@ opentitan_test(
 opentitan_test(
     name = "kdf_kmac_sideload_functest_hardcoded",
     srcs = ["kdf_kmac_sideload_functest.c"],
+    broken = fpga_params(tags = ["broken"]),
     exec_env = dicts.add(
         EARLGREY_TEST_ENVS,
+        {
+            # FIXME broken in sival ROM_EXT, remove this line when fixed. See #21706.
+            "//hw/top_earlgrey:fpga_cw310_sival_rom_ext": "broken",
+        },
     ),
     verilator = verilator_params(
         timeout = "long",
@@ -539,8 +543,13 @@ opentitan_test(
 opentitan_test(
     name = "kmac_sideload_functest_hardcoded",
     srcs = ["kmac_sideload_functest.c"],
+    broken = fpga_params(tags = ["broken"]),
     exec_env = dicts.add(
         EARLGREY_TEST_ENVS,
+        {
+            # FIXME broken in sival ROM_EXT, remove this line when fixed. See #21706.
+            "//hw/top_earlgrey:fpga_cw310_sival_rom_ext": "broken",
+        },
     ),
     verilator = verilator_params(
         timeout = "long",

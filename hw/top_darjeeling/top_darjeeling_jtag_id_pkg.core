@@ -5,7 +5,6 @@ CAPI=2:
 
 name: "lowrisc:constants:top_darjeeling_jtag_id_pkg"
 description: "jtag id for top_darjeeling"
-
 filesets:
   files_rtl:
     depend:

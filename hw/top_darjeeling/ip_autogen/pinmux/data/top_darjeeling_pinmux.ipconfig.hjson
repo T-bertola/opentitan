@@ -16,6 +16,5 @@
     enable_usb_wakeup: false
     enable_strap_sampling: false
     topname: darjeeling
-    uniquified_modules: {}
   }
 }

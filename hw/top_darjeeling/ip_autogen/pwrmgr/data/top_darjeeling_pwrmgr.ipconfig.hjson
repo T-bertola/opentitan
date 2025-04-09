@@ -5,7 +5,7 @@
   instance_name: top_darjeeling_pwrmgr
   param_values:
   {
-    NumWkups: 4
+    NumWkups: 5
     Wkups:
     [
       {
@@ -19,6 +19,11 @@
         module: aon_timer_aon
       }
       {
+        name: wkup_req
+        width: "1"
+        module: sensor_ctrl
+      }
+      {
         name: wkup_internal_req
         width: "1"
         module: soc_proxy
@@ -29,9 +34,23 @@
         module: soc_proxy
       }
     ]
-    NumRstReqs: 2
     rst_reqs:
     {
+      peripheral:
+      [
+        {
+          name: aon_timer_rst_req
+          width: "1"
+          module: aon_timer_aon
+          desc: watchdog reset requestt
+        }
+        {
+          name: rst_req_external
+          width: "1"
+          module: soc_proxy
+          desc: External reset request
+        }
+      ]
       int:
       [
         {
@@ -53,31 +72,10 @@
           module: rv_dm
         }
       ]
-      peripheral:
-      [
-        {
-          name: aon_timer_rst_req
-          width: "1"
-          module: aon_timer_aon
-          desc: watchdog reset request
-        }
-        {
-          name: rst_req_external
-          width: "1"
-          module: soc_proxy
-          desc: External reset request
-        }
-      ]
     }
+    NumRstReqs: 2
     wait_for_external_reset: true
     NumRomInputs: 3
-    has_aon_clk: true
-    src_clks:
-    [
-      main
-      io
-    ]
     topname: darjeeling
-    uniquified_modules: {}
   }
 }

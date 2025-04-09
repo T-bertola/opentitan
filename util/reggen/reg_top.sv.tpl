@@ -28,17 +28,12 @@
   lblock = block.name.lower()
   ublock = lblock.upper()
 
-  reg_pkg = f'{lblock}{alias_impl}_reg_pkg'
-  num_regs = f'NumRegs{if_name.title() if if_name else ""}'
-
   u_mod_base = mod_base.upper()
 
   reg2hw_t = gen_rtl.get_iface_tx_type(block, if_name, False)
   hw2reg_t = gen_rtl.get_iface_tx_type(block, if_name, True)
 
-  dynamic_racl_support = block.bus_interfaces.racl_support[if_name]
-  static_racl_support = block.bus_interfaces.static_racl_support[if_name]
-  racl_support = dynamic_racl_support or static_racl_support
+  racl_support = block.bus_interfaces.racl_support[if_name]
 
   win_array_decl = f'  [{num_wins}]' if num_wins > 1 else ''
 
@@ -125,12 +120,8 @@
 module ${mod_name}${' (' if not racl_support else ''}
 % if racl_support:
   # (
-    parameter bit          EnableRacl           = 1'b0,
-    parameter bit          RaclErrorRsp         = 1'b1${"," if dynamic_racl_support else ""}
-  % if dynamic_racl_support:
-    parameter top_racl_pkg::racl_policy_sel_t RaclPolicySelVec[${reg_pkg}::${num_regs}] =
-      '{${reg_pkg}::${num_regs}{0}}
-  % endif
+    parameter bit EnableRacl   = 1'b0,
+    parameter bit RaclErrorRsp = 1'b1
   ) (
 % endif
   input clk_i,
@@ -153,10 +144,10 @@ module ${mod_name}${' (' if not racl_support else ''}
 % endif
   // To HW
 % if rb.get_n_bits(["q","qe","re"]):
-  output ${reg_pkg}::${reg2hw_t} reg2hw, // Write
+  output ${lblock}${alias_impl}_reg_pkg::${reg2hw_t} reg2hw, // Write
 % endif
 % if rb.get_n_bits(["d","de"]):
-  input  ${reg_pkg}::${hw2reg_t} hw2reg, // Read
+  input  ${lblock}${alias_impl}_reg_pkg::${hw2reg_t} hw2reg, // Read
 % endif
 
 % if rb.has_internal_shadowed_reg():
@@ -166,17 +157,17 @@ module ${mod_name}${' (' if not racl_support else ''}
 %endif
 % if racl_support:
   // RACL interface
-% if dynamic_racl_support:
   input  top_racl_pkg::racl_policy_vec_t racl_policies_i,
-% endif
-  output top_racl_pkg::racl_error_log_t  racl_error_o,
+  input  integer racl_policy_sel_vec_i[${len(rb.flat_regs)}],
+  output logic racl_error_o,
+  output top_racl_pkg::racl_error_log_t racl_error_log_o,
 
 % endif
   // Integrity check errors
   output logic intg_err_o
 );
 
-  import ${reg_pkg}::* ;
+  import ${lblock}${alias_impl}_reg_pkg::* ;
 
 % if needs_aw:
   localparam int AW = ${addr_width};
@@ -414,7 +405,7 @@ module ${mod_name}${' (' if not racl_support else ''}
     .rdata_i (reg_rdata),
   % if racl_support:
     // Translate RACL error to TLUL error if enabled
-    .error_i (reg_error | (RaclErrorRsp & racl_error_o.valid))
+    .error_i (reg_error | (RaclErrorRsp & racl_error_o))
   % else:
     .error_i (reg_error)
   % endif
@@ -683,18 +674,12 @@ ${finst_gen(sr, field, finst_name, fsig_name, fidx)}
     assign racl_role = top_racl_pkg::tlul_extract_racl_role_bits(tl_i.a_user.rsvd);
 
     prim_onehot_enc #(
-      .OneHotWidth( $bits(top_racl_pkg::racl_role_vec_t) )
+      .OneHotWidth( $bits(prim_onehot_enc) )
     ) u_racl_role_encode (
       .in_i ( racl_role     ),
       .en_i ( 1'b1          ),
       .out_o( racl_role_vec )
     );
-  % if static_racl_support:
-    // For the static RACL assignment for racl_ctrl only one role (ROT_PRIVATE) is used,
-    // leaving others unread. Intentionally read them to avoid linting errors.
-    logic unused_role_vec;
-    assign unused_role_vec = ^racl_role_vec;
-  % endif
   end else begin : gen_no_racl_role_logic
     assign racl_role     = '0;
     assign racl_role_vec = '0;
@@ -714,22 +699,11 @@ ${finst_gen(sr, field, finst_name, fsig_name, fidx)}
   % if racl_support:
 
     if (EnableRacl) begin : gen_racl_hit
-      for (int unsigned slice_idx = 0; slice_idx < ${len(regs_flat)}; slice_idx++) begin
-      % if dynamic_racl_support:
-        racl_addr_hit_read[slice_idx] =
-            addr_hit[slice_idx] & (|(racl_policies_i[RaclPolicySelVec[slice_idx]].read_perm
-                                      & racl_role_vec));
-        racl_addr_hit_write[slice_idx] =
-            addr_hit[slice_idx] & (|(racl_policies_i[RaclPolicySelVec[slice_idx]].write_perm
-                                      & racl_role_vec));
-      % else:
-        // Static RACL protection with ROT_PRIVATE policy
-        racl_addr_hit_read[slice_idx] =
-          addr_hit[slice_idx] & (|(top_racl_pkg::RACL_POLICY_ROT_PRIVATE_RD & racl_role_vec));
-        racl_addr_hit_write[slice_idx] =
-          addr_hit[slice_idx] & (|(top_racl_pkg::RACL_POLICY_ROT_PRIVATE_WR & racl_role_vec));
-      % endif
-      end
+    % for i,r in enumerate(regs_flat):
+<% slice = '{}'.format(i).rjust(max_regs_char) %>\
+      racl_addr_hit_read [${slice}] = addr_hit[${slice}] & (|(racl_policies_i[racl_policy_sel_vec_i[${slice}]].read_perm  & racl_role_vec));
+      racl_addr_hit_write[${slice}] = addr_hit[${slice}] & (|(racl_policies_i[racl_policy_sel_vec_i[${slice}]].write_perm & racl_role_vec));
+    % endfor
     end else begin : gen_no_racl
       racl_addr_hit_read  = addr_hit;
       racl_addr_hit_write = addr_hit;
@@ -739,19 +713,16 @@ ${finst_gen(sr, field, finst_name, fsig_name, fidx)}
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
 % if racl_support:
-  // A valid address hit, access, but failed the RACL check
-  assign racl_error_o.valid = |addr_hit & ((reg_re & ~|racl_addr_hit_read) |
-                                           (reg_we & ~|racl_addr_hit_write));
-  assign racl_error_o.request_address = top_pkg::TL_AW'(reg_addr);
-  assign racl_error_o.racl_role       = racl_role;
-  assign racl_error_o.overflow        = 1'b0;
+  // Address hit but failed the RACL check
+  assign racl_error_o = (|addr_hit) & ~(|(addr_hit & (racl_addr_hit_read | racl_addr_hit_write)));
+  assign racl_error_log_o.racl_role  = racl_role;
 
   if (EnableRacl) begin : gen_racl_log
-    assign racl_error_o.ctn_uid     = top_racl_pkg::tlul_extract_ctn_uid_bits(tl_i.a_user.rsvd);
-    assign racl_error_o.read_access = tl_i.a_opcode == tlul_pkg::Get;
+    assign racl_error_log_o.ctn_uid        = top_racl_pkg::tlul_extract_ctn_uid_bits(tl_i.a_user.rsvd);
+    assign racl_error_log_o.read_not_write = tl_i.a_opcode == tlul_pkg::Get;
   end else begin : gen_no_racl_log
-    assign racl_error_o.ctn_uid     = '0;
-    assign racl_error_o.read_access = 1'b0;
+    assign racl_error_log_o.ctn_uid        = '0;
+    assign racl_error_log_o.read_not_write = 1'b0;
   end
 % endif
 
@@ -913,7 +884,7 @@ ${rdata_gen(f, r.name.lower() + "_" + f.name.lower())}\
   assign reg_busy = shadow_busy;
   % else:
   logic reg_busy_sel;
-  assign reg_busy = (reg_busy_sel | shadow_busy) & tl_i.a_valid;
+  assign reg_busy = reg_busy_sel | shadow_busy;
   always_comb begin
     reg_busy_sel = '0;
     unique case (1'b1)
@@ -940,10 +911,6 @@ ${rdata_gen(f, r.name.lower() + "_" + f.name.lower())}\
   logic unused_be;
   assign unused_wdata = ^reg_wdata;
   assign unused_be = ^reg_be;
-% endif
-% if dynamic_racl_support:
-  logic unused_policy_sel;
-  assign unused_policy_sel = ^racl_policies_i;
 % endif
 % if rb.all_regs:
 
@@ -1181,9 +1148,8 @@ ${bits.msb}\
 </%def>\
 <%def name="reg_enable_gen(reg, idx)">\
 <% wr_addr_hit = 'racl_addr_hit_write' if racl_support else 'addr_hit'%>\
-<% re_addr_hit = 'racl_addr_hit_read'  if racl_support else 'addr_hit'%>\
   % if reg.needs_re():
-  assign ${reg.name.lower()}_re = ${re_addr_hit}[${idx}] & reg_re & !reg_error;
+  assign ${reg.name.lower()}_re = ${wr_addr_hit}[${idx}] & reg_re & !reg_error;
   % endif
   % if reg.needs_we():
   assign ${reg.name.lower()}_we = ${wr_addr_hit}[${idx}] & reg_we & !reg_error;

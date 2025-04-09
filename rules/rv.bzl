@@ -5,7 +5,7 @@
 """Helpers for transitioning to the RISC-V target."""
 
 OPENTITAN_CPU = "@platforms//cpu:riscv32"
-OPENTITAN_PLATFORM = "//toolchain:opentitan_platform"
+OPENTITAN_PLATFORM = "@crt//platforms/riscv32:opentitan"
 
 # This constant holds a dictionary of per-device dependencies which are used to
 # generate slightly different binaries for each hardware target, including two
@@ -22,6 +22,7 @@ def _opentitan_transition_impl(settings, attr):
     return {
         "//command_line_option:platforms": attr.platform,
         "//command_line_option:copt": settings["//command_line_option:copt"],
+        "//command_line_option:features": settings["//command_line_option:features"],
         "//hw/bitstream/universal:rom": "//hw/bitstream/universal:none",
         "//hw/bitstream/universal:otp": "//hw/bitstream/universal:none",
         "//hw/bitstream/universal:env": "//hw/bitstream/universal:none",
@@ -36,10 +37,12 @@ opentitan_transition = transition(
     #   present in the englishbreakfast rv32i implementation.
     inputs = [
         "//command_line_option:copt",
+        "//command_line_option:features",
     ],
     outputs = [
         "//command_line_option:platforms",
         "//command_line_option:copt",
+        "//command_line_option:features",
         "//hw/bitstream/universal:rom",
         "//hw/bitstream/universal:otp",
         "//hw/bitstream/universal:env",

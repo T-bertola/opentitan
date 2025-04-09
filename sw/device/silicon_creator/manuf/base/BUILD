@@ -93,7 +93,7 @@ opentitan_binary(
     linker_script = "//sw/device/silicon_creator/manuf/lib:sram_program_linker_script",
     deps = [
         ":flash_info_permissions",
-        "//hw/top:otp_ctrl_c_regs",
+        "//hw/ip/otp_ctrl/data:otp_ctrl_c_regs",
         "//hw/top_earlgrey/sw/autogen:top_earlgrey",
         "//sw/device/lib/arch:device",
         "//sw/device/lib/base:macros",
@@ -136,7 +136,7 @@ opentitan_test(
         binaries = {":sram_cp_provision": "sram_cp_provision"},
         changes_otp = True,
         needs_jtag = True,
-        otp = "//hw/top_earlgrey/data/otp/sival_skus:otp_img_test_unlocked0_manuf_empty",
+        otp = "//hw/ip/otp_ctrl/data/earlgrey_skus/sival:otp_img_test_unlocked0_manuf_empty",
         tags = ["manuf"],
         test_cmd = _CP_PROVISIONING_CMD_ARGS,
         test_harness = _CP_PROVISIONING_HARNESS,
@@ -164,7 +164,7 @@ opentitan_test(
         },
         changes_otp = True,
         needs_jtag = True,
-        otp = "//hw/top_earlgrey/data/otp:img_raw",
+        otp = "//hw/ip/otp_ctrl/data:img_raw",
         tags = ["manuf"],
         test_cmd = """
             --provisioning-sram-elf={sram_cp_provision}
@@ -226,13 +226,6 @@ filegroup(
 cc_library(
     name = "personalize_ext",
     hdrs = ["personalize_ext.h"],
-    deps = [
-        "//sw/device/lib/base:status",
-        "//sw/device/lib/dif:flash_ctrl",
-        "//sw/device/lib/testing/json:provisioning_data",
-        "//sw/device/silicon_creator/lib/cert",
-        "//sw/device/silicon_creator/lib/sigverify:ecdsa_p256_key",
-    ],
 )
 
 cc_library(
@@ -404,7 +397,7 @@ filegroup(
             changes_otp = True,
             data = config["ca_data"],
             needs_jtag = True,
-            otp = "//hw/top_earlgrey/data/otp/sival_skus:otp_img_test_locked0_manuf_initialized",
+            otp = "//hw/ip/otp_ctrl/data/earlgrey_skus/sival:otp_img_test_locked0_manuf_initialized",
             owner_slot_b = OWNER_SLOTS["b"],
             rom_ext_slot_a = SLOTS["a"],
             rom_ext_slot_b = SLOTS["b"],

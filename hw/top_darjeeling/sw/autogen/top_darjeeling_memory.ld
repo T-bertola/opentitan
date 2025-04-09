@@ -20,8 +20,8 @@ MEMORY {
   ram_mbox(rwx) : ORIGIN = 0x11000000, LENGTH = 0x1000
   rom0(rx) : ORIGIN = 0x00008000, LENGTH = 0x8000
   rom1(rx) : ORIGIN = 0x00020000, LENGTH = 0x10000
-  rom_ext_virtual(rx) : ORIGIN = 0x90000000, LENGTH = 0x80000
-  owner_virtual(rx) : ORIGIN = 0xa0000000, LENGTH = 0x80000
+  rom_ext_virtual(rx) : ORIGIN = 0x90000000, LENGTH = None
+  owner_virtual(rx) : ORIGIN = 0xa0000000, LENGTH = None
 }
 
 /**
@@ -59,6 +59,6 @@ _rom1_chip_info_start = _rom1_chip_info_end - _chip_info_size;
  * large enough to cover the .crt section.
  *
  * NOTE: This value must match the size of the RX region in
- * hw/darjeeling/rtl/ibex_pmp_reset_pkg.sv.
+ * hw/ip/rv_core_ibex/rtl/ibex_pmp_reset.svh.
  */
 _epmp_reset_rx_size = 2048;

@@ -7,6 +7,7 @@ load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("//rules:const.bzl", "KEY_AUTHENTICITY")
 load("//rules:fusesoc.bzl", "fusesoc_build")
 load("//rules:otp.bzl", "get_otp_images")
+load("//rules:splice.bzl", "bitstream_splice")
 load("//rules:bitstreams.bzl", "bitstream_manifest_fragment")
 
 package(default_visibility = ["//visibility:public"])
@@ -23,7 +24,7 @@ _CW310_TESTROM = "//sw/device/lib/testing/test_rom:test_rom_fpga_cw310_scr_vmem"
 
 _CW340_TESTROM = _CW310_TESTROM
 
-_OTP_RMA = "//hw/top_earlgrey/data/otp:img_rma"
+_OTP_RMA = "//hw/ip/otp_ctrl/data:img_rma"
 
 _CW310_TESTROM_PATH = "{}/$(location {})".format(_PREFIX, _CW310_TESTROM)
 
@@ -39,12 +40,12 @@ fusesoc_build(
     name = "fpga_cw310",
     testonly = True,
     srcs = [
-        "//hw:rtl_files",
+        "//hw:all_files",
         _CW310_TESTROM,
         _OTP_RMA,
     ],
-    cores = ["//hw:cores"],
-    data = ["//hw/ip/otbn:rtl_files"],
+    cores = ["//:cores"],
+    data = ["//hw/ip/otbn:all_files"],
     flags = [
         "--BootRomInitFile=" + _CW310_TESTROM_PATH,
         "--OtpCtrlMemInitFile=" + _OTP_RMA_PATH,
@@ -80,12 +81,12 @@ fusesoc_build(
     name = "fpga_cw310_hyperdebug",
     testonly = True,
     srcs = [
-        "//hw:rtl_files",
+        "//hw:all_files",
         _CW310_TESTROM,
         _OTP_RMA,
     ],
-    cores = ["//hw:cores"],
-    data = ["//hw/ip/otbn:rtl_files"],
+    cores = ["//:cores"],
+    data = ["//hw/ip/otbn:all_files"],
     flags = [
         "--BootRomInitFile=" + _CW310_TESTROM_PATH,
         "--OtpCtrlMemInitFile=" + _OTP_RMA_PATH,
@@ -121,12 +122,12 @@ fusesoc_build(
     name = "fpga_cw340",
     testonly = True,
     srcs = [
-        "//hw:rtl_files",
+        "//hw:all_files",
         _CW340_TESTROM,
         _OTP_RMA,
     ],
-    cores = ["//hw:cores"],
-    data = ["//hw/ip/otbn:rtl_files"],
+    cores = ["//:cores"],
+    data = ["//hw/ip/otbn:all_files"],
     flags = [
         "--BootRomInitFile=" + _CW340_TESTROM_PATH,
         "--OtpCtrlMemInitFile=" + _OTP_RMA_PATH,

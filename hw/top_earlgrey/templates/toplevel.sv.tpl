@@ -9,7 +9,7 @@ import topgen.lib as lib
 from reggen.params import Parameter
 from topgen.clocks import Clocks
 from topgen.resets import Resets
-from topgen.merge import is_unmanaged_reset, get_alerts_with_unique_lpg_idx
+from topgen.merge import is_unmanaged_reset
 
 num_mio_inputs = top['pinmux']['io_counts']['muxed']['inouts'] + \
                  top['pinmux']['io_counts']['muxed']['inputs']
@@ -252,11 +252,11 @@ module top_${top["name"]} #(
 % endfor
 
   // Alert list
-  prim_alert_pkg::alert_tx_t [alert_handler_pkg::NAlerts-1:0]  alert_tx;
-  prim_alert_pkg::alert_rx_t [alert_handler_pkg::NAlerts-1:0]  alert_rx;
+  prim_alert_pkg::alert_tx_t [alert_pkg::NAlerts-1:0]  alert_tx;
+  prim_alert_pkg::alert_rx_t [alert_pkg::NAlerts-1:0]  alert_rx;
 
 % if not top["alert"]:
-  for (genvar k = 0; k < alert_handler_pkg::NAlerts; k++) begin : gen_alert_tie_off
+  for (genvar k = 0; k < alert_pkg::NAlerts; k++) begin : gen_alert_tie_off
     // tie off if no alerts present in the system
     assign alert_tx[k].alert_p = 1'b0;
     assign alert_tx[k].alert_n = 1'b1;
@@ -328,7 +328,7 @@ module top_${top["name"]} #(
 ## Inter-module signal collection
 
 % for m in top["module"]:
-  % if m.get("template_type") == "otp_ctrl":
+  % if m["type"] == "otp_ctrl":
   // OTP HW_CFG* Broadcast signals.
   // TODO(#6713): The actual struct breakout and mapping currently needs to
   // be performed by hand.
@@ -397,8 +397,8 @@ module top_${top["name"]} #(
   );
 
   // Wire up alert handler LPGs
-  prim_mubi_pkg::mubi4_t [alert_handler_pkg::NLpg-1:0] lpg_cg_en;
-  prim_mubi_pkg::mubi4_t [alert_handler_pkg::NLpg-1:0] lpg_rst_en;
+  prim_mubi_pkg::mubi4_t [alert_pkg::NLpg-1:0] lpg_cg_en;
+  prim_mubi_pkg::mubi4_t [alert_pkg::NLpg-1:0] lpg_rst_en;
 
 <%
 # get all known typed clocks and add them to a dict
@@ -439,13 +439,6 @@ for rst in output_rsts:
 %>\
   assign lpg_cg_en[${k}] = ${cg_en};
   assign lpg_rst_en[${k}] = ${rst_en};
-% endfor
-% for alert_group, alerts in top['incoming_alert'].items():
-  % for unique_alert_lpg_entry in get_alerts_with_unique_lpg_idx(alerts):
-<% k += 1 %>\
-  assign lpg_cg_en[${k}] = incoming_lpg_cg_en_${alert_group}_i[${unique_alert_lpg_entry["lpg_idx"]}];
-  assign lpg_rst_en[${k}] = incoming_lpg_rst_en_${alert_group}_i[${unique_alert_lpg_entry["lpg_idx"]}];
-  % endfor
 % endfor
 
 % for alert_group, lpgs in top['outgoing_alert_lpgs'].items():
@@ -502,7 +495,6 @@ max_intrwidth = (max(len(x.name) for x in block.interrupts)
 %>\
   % if m["param_list"] or block.alerts:
   ${m["type"]} #(
-<%include file="/toplevel_racl.tpl" args="m=m,top=top"/>\
   % if block.alerts:
 <%
 w = len(block.alerts)
@@ -582,10 +574,10 @@ slice = f"{lo+w-1}:{lo}"
         % endif
       % endfor
     % endif
-    % if m.get("template_type") == "rv_plic":
+    % if m["type"] == "rv_plic":
       .intr_src_i (intr_vector),
     % endif
-    % if m.get("template_type") == "pinmux":
+    % if m["type"] == "pinmux":
 
       .periph_to_mio_i      (mio_d2p    ),
       .periph_to_mio_oe_i   (mio_en_d2p ),
@@ -606,7 +598,7 @@ slice = f"{lo+w-1}:{lo}"
       .dio_in_i,
 
     % endif
-    % if m.get("template_type") == "alert_handler":
+    % if m["type"] == "alert_handler":
       // alert signals
       .alert_rx_o  ( alert_rx ),
       .alert_tx_i  ( alert_tx ),
@@ -653,8 +645,8 @@ slice = str(alert_idx+w-1) + ":" + str(alert_idx)
   % for alert in alerts:
   // [${alert_idx}]: ${alert['name']}<% alert_idx += 1 %>
   % endfor
-  assign alert_tx[${slice}] = incoming_alert_${alert_group}_tx_i;
-  assign incoming_alert_${alert_group}_rx_o = alert_rx[${slice}];
+  assign alerts_tx[${slice}] = incoming_alert_${alert_group}_tx_i;
+  assign incoming_alert_${alert_group}_rx_o = alerts_rx[${slice}];
 % endfor
 
   // interrupt assignments

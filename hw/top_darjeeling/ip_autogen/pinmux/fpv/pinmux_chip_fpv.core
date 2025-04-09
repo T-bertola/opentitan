@@ -2,22 +2,21 @@ CAPI=2:
 # Copyright lowRISC contributors (OpenTitan project).
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
-name: lowrisc:darjeeling_systems:pinmux_chip_fpv:0.1
+name: lowrisc:opentitan:top_darjeeling_pinmux_chip_fpv:0.1
 description: "pinmux FPV target with chip_earlgrey parameters"
+virtual:
+  - lowrisc:ip_interfaces:pinmux_chip_fpv
 
 filesets:
   files_formal:
     depend:
       - lowrisc:prim:all
       - lowrisc:ip:tlul
-      - lowrisc:ip:jtag_pkg
-      - lowrisc:prim:mubi_pkg
-      - lowrisc:ip:lc_ctrl_pkg
-      - lowrisc:darjeeling_ip:pinmux:0.1
+      - lowrisc:ip_interfaces:pinmux
       - lowrisc:fpv:csr_assert_gen
-      - lowrisc:darjeeling_fpv:pinmux_common_fpv:0.1
-      - lowrisc:darjeeling_constants:top_pkg
-      - lowrisc:darjeeling_systems:scan_role_pkg
+      - lowrisc:fpv:pinmux_common_fpv
+      - lowrisc:systems:top_darjeeling_pkg
+      - lowrisc:systems:scan_role_pkg
     files:
       - tb/pinmux_chip_tb.sv
     file_type: systemVerilogSource

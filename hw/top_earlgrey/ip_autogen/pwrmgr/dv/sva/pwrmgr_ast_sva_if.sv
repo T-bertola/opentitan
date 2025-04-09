@@ -42,9 +42,9 @@ interface pwrmgr_ast_sva_if #(
   // Clock enable-valid.
 
   // Changes triggered by por_d0_ni only affect clk_val.
-  `ASSERT(MainClkGlitchToValOff_A, $fell(por_d0_ni) |-> ##[0:1] !pwr_ast_i.core_clk_val, clk_slow_i,
+  `ASSERT(CoreClkGlitchToValOff_A, $fell(por_d0_ni) |-> ##[0:1] !pwr_ast_i.core_clk_val, clk_slow_i,
           reset_or_disable)
-  `ASSERT(MainClkGlitchToValOn_A,
+  `ASSERT(CoreClkGlitchToValOn_A,
           $rose(por_d0_ni) && pwr_ast_o.core_clk_en |-> ##[0:2] pwr_ast_i.core_clk_val, clk_slow_i,
           reset_or_disable)
   `ASSERT(IoClkGlitchToValOff_A, $fell(por_d0_ni) |-> ##[0:1] !pwr_ast_i.io_clk_val, clk_slow_i,
@@ -57,11 +57,12 @@ interface pwrmgr_ast_sva_if #(
   `ASSERT(UsbClkGlitchToValOn_A,
           $rose(por_d0_ni) && pwr_ast_o.usb_clk_en |-> ##[0:5] pwr_ast_i.usb_clk_val, clk_slow_i,
           reset_or_disable)
+
   // Changes not triggered by por_d0_ni
-  `ASSERT(MainClkHandshakeOn_A,
+  `ASSERT(CoreClkHandshakeOn_A,
           $rose(pwr_ast_o.core_clk_en) && por_d0_ni |-> `CLK_WAIT_BOUNDS
           pwr_ast_i.core_clk_val || !por_d0_ni, clk_slow_i, reset_or_disable)
-  `ASSERT(MainClkHandshakeOff_A,
+  `ASSERT(CoreClkHandshakeOff_A,
           $fell(pwr_ast_o.core_clk_en) |-> `CLK_WAIT_BOUNDS !pwr_ast_i.core_clk_val, clk_slow_i,
           reset_or_disable)
 
@@ -82,12 +83,10 @@ interface pwrmgr_ast_sva_if #(
           reset_or_disable)
 
   if (CheckClocks) begin : gen_check_clock
-    int main_clk_cycles;
-    always_ff @(posedge clk_main_i) main_clk_cyces++;
-    int io_clk_cycles;
-    always_ff @(posedge clk_io_i) io_clk_cyces++;
-    int usb_clk_cycles;
-    always_ff @(posedge clk_usb_i) usb_clk_cyces++;
+    int main_clk_cycles, io_clk_cycles, usb_clk_cycles;
+    always_ff @(posedge clk_main_i) main_clk_cycles++;
+    always_ff @(posedge clk_io_i) io_clk_cycles++;
+    always_ff @(posedge clk_usb_i) usb_clk_cycles++;
 
     `ASSERT(MainClkStopped_A,
             $fell(
@@ -111,7 +110,7 @@ interface pwrmgr_ast_sva_if #(
                 io_clk_cycles
             ) || pwr_ast_i.io_clk_val) [* 1 : $],
             clk_slow_i, reset_or_disable)
-    `ASSERT(IoClkRun_A,
+    `ASSERT(IOClkRun_A,
             $rose(
                 pwr_ast_i.io_clk_val
             ) |=> (!$stable(
@@ -126,14 +125,13 @@ interface pwrmgr_ast_sva_if #(
                 usb_clk_cycles
             ) || pwr_ast_i.usb_clk_val) [* 1 : $],
             clk_slow_i, reset_or_disable)
-    `ASSERT(UsbClkRun_A,
+    `ASSERT(USBClkRun_A,
             $rose(
                 pwr_ast_i.usb_clk_val
             ) |=> (!$stable(
                 usb_clk_cycles
             ) || !pwr_ast_i.usb_clk_val) [* 1 : $],
             clk_slow_i, reset_or_disable)
-
   end
 
   // Main pd-pok

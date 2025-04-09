@@ -10,12 +10,6 @@
       default: ""
     }
     {
-      name:    "uniquified_modules"
-      desc:    "A dictionary mapping template_names to uniquified_names"
-      type:    "object"
-      default: {"clkmgr": "clkmgr1"}
-    }
-    {
       name:    "module_instance_name"
       desc:    "instance name in case there are multiple AC Range Check instances"
       type:    "string"
@@ -26,18 +20,6 @@
       desc:    "Number of range registers",
       type:    "int",
       default: "32",
-    }
-    {
-      name:    "nr_role_bits",
-      desc:    "Number of RACL bits",
-      type:    "int",
-      default: "4",
-    }
-    {
-      name:    "nr_ctn_uid_bits",
-      desc:    "Number of CTN UID bits",
-      type:    "int",
-      default: "5",
     }
   ]
 }

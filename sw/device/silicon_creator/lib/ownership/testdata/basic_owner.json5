@@ -8,6 +8,7 @@
 // To convert this file to binary form, use opentitantool:
 // $ opentitantool ownership config --input file.json file.bin
 {
+  version: 0,
   sram_exec: "DisabledLocked",
   ownership_key_alg: "EcdsaP256",
   owner_key: {
@@ -63,18 +64,18 @@
             scramble: false,
             ecc: false,
             high_endurance: false,
-            protect_when_active: true
+            protect_when_primary: true
           },
           {
             start: 32,
-            size: 192,
+            size: 384,
             read: true,
             program: true,
             erase: true,
             scramble: true,
             ecc: true,
             high_endurance: false,
-            protect_when_active: true
+            protect_when_primary: true
           },
           {
             start: 224,
@@ -85,7 +86,7 @@
             scramble: false,
             ecc: false,
             high_endurance: true,
-            protect_when_active: false
+            protect_when_primary: false
           },
           {
             start: 256,
@@ -96,18 +97,18 @@
             scramble: false,
             ecc: false,
             high_endurance: false,
-            protect_when_active: true
+            protect_when_primary: true
           },
           {
             start: 288,
-            size: 192,
+            size: 384,
             read: true,
             program: true,
             erase: true,
             scramble: true,
             ecc: true,
             high_endurance: false,
-            protect_when_active: true
+            protect_when_primary: true
           },
           {
             start: 480,
@@ -118,7 +119,7 @@
             scramble: false,
             ecc: false,
             high_endurance: true,
-            protect_when_active: false
+            protect_when_primary: false
           }
         ]
       }
@@ -136,7 +137,7 @@
             scramble: true,
             ecc: true,
             high_endurance: false,
-            protect_when_active: false
+            protect_when_primary: false
           },
           {
             bank: 0,
@@ -148,7 +149,7 @@
             scramble: true,
             ecc: true,
             high_endurance: false,
-            protect_when_active: false
+            protect_when_primary: false
           },
           {
             bank: 0,
@@ -160,7 +161,7 @@
             scramble: true,
             ecc: true,
             high_endurance: false,
-            protect_when_active: false
+            protect_when_primary: false
           },
           {
             bank: 0,
@@ -172,7 +173,7 @@
             scramble: true,
             ecc: true,
             high_endurance: false,
-            protect_when_active: false
+            protect_when_primary: false
           }
         ]
       }
@@ -181,13 +182,14 @@
       RescueConfig: {
         rescue_type: "Xmodem",
         start: 32,
-        size: 192,
+        size: 224,
         command_allow: [
           "Empty",
           "MinBl0SecVerRequest",
           "NextBl0SlotRequest",
-          "OwnershipUnlockRequest",
-          "OwnershipActivateRequest",
+          "PrimaryBl0SlotRequest",
+          "UnlockOwnershipRequest",
+          "ActivateOwnerRequest",
           "Rescue",
           "GetBootLog",
           "BootSvcReq",
@@ -197,4 +199,5 @@
       }
     }
   ],
+  seal: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 }

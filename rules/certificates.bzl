@@ -71,7 +71,7 @@ certificate_codegen = rule(
     attrs = {
         "template": attr.label(allow_single_file = True, doc = "path to the hjson template file"),
         "clang_format": attr.label(
-            default = "@lowrisc_rv32imcb_toolchain//:bin/clang-format",
+            default = "@lowrisc_rv32imcb_files//:bin/clang-format",
             allow_single_file = True,
             cfg = "host",
             executable = True,
@@ -117,21 +117,14 @@ def certificate_template(name, template, cert_format = "x509"):
         output_group = "unittest",
     )
 
-    if cert_format == "x509":
-        runtime_deps = [
-            "@//sw/device/silicon_creator/lib/cert:asn1",
-            "@//sw/device/silicon_creator/lib/cert:template",
-        ]
-    else:
-        runtime_deps = [
-            "@//sw/device/silicon_creator/lib/cert:cbor",
-        ]
-
     native.cc_library(
         name = "{}_library".format(name),
         srcs = [":{}_srcs".format(name)],
         hdrs = [":{}_hdrs".format(name)],
-        deps = runtime_deps,
+        deps = [
+            "@//sw/device/silicon_creator/lib/cert:asn1",
+            "@//sw/device/silicon_creator/lib/cert:cbor",
+        ],
     )
 
     native.cc_test(

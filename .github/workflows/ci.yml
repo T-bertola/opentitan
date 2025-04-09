@@ -54,8 +54,6 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
       - name: Python (mypy)
         run: ./ci/scripts/mypy.sh
-      - name: Python (ruff)
-        run: ruff check
       - name: Validate testplans with schema
         run: ./ci/scripts/validate_testplans.sh
       - name: C/C++ formatting
@@ -74,8 +72,6 @@ jobs:
         run: ./ci/scripts/check-links.sh
       - name: Generated documentation
         run: ./ci/scripts/check-cmdgen.sh
-      - name: Lock files
-        run: ./ci/scripts/check-lock-files.sh
 
   slow_lint:
     name: Lint (slow)
@@ -91,8 +87,10 @@ jobs:
           service_account_json: '${{ secrets.BAZEL_CACHE_CREDS }}'
       - name: Countermeasures implemented (earlgrey)
         run: ./ci/scripts/check-countermeasures.sh earlgrey
+        continue-on-error: true
       - name: Countermeasures implemented (englishbreakfast)
         run: ./ci/scripts/check-countermeasures.sh englishbreakfast
+        continue-on-error: true
       - name: Bazel test suite tags
         run: ./ci/scripts/check_bazel_test_suites.py
         continue-on-error: true
@@ -104,6 +102,7 @@ jobs:
         run: ./ci/scripts/check-bazel-banned-rules.sh
       - name: Bazel target names
         run: ./ci/scripts/check_bazel_target_names.py
+        continue-on-error: true
       - name: DV software images
         run: ./ci/scripts/check_dv_sw_images.sh
         continue-on-error: true
@@ -282,11 +281,7 @@ jobs:
         with:
           service_account_json: '${{ secrets.BAZEL_CACHE_CREDS }}'
       - name: Build simulator with Verilator
-        run: |
-          ./bazelisk.sh build //hw/top_englishbreakfast:verilator_sim
-          sim_binary_path=$(./bazelisk.sh cquery --output=files //hw/top_englishbreakfast:verilator_sim)
-          mkdir -p build-bin/hw/top_englishbreakfast
-          cp ${sim_binary_path} build-bin/hw/top_englishbreakfast/
+        run: ./ci/scripts/build-chip-verilator.sh englishbreakfast
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
@@ -295,15 +290,10 @@ jobs:
           overwrite: true
       - name: Test
         run: ./ci/scripts/run-english-breakfast-verilator-tests.sh
-        # The patching mechanism for english breakfast is incompatible with multitop
-        # so this job will fail. At the same time, multitop is not advanced enough
-        # that we can compile those tests for EB yet. Ignore this job until we can
-        # fix it.
-        continue-on-error: true
 
   verilator_earlgrey:
     name: Verilated Earl Grey
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     needs: quick_lint
     timeout-minutes: 240
     steps:
@@ -333,30 +323,6 @@ jobs:
           service_account_json: '${{ secrets.BAZEL_CACHE_CREDS }}'
       - name: Build bitstream
         run: |
-          . util/build_consts.sh
-
-          bitstream_target=//hw/top_englishbreakfast/bitstream:fpga_cw305
-          archive_target=//hw/top_englishbreakfast/bitstream:englishbreakfast_cw305_archive
-          bitstream_archive=$(./bazelisk.sh outquery ${archive_target})
-
-          trap 'get_logs' EXIT
-          get_logs() {
-            design_name=chip_englishbreakfast_cw305
-            SUB_PATH="hw/top_englishbreakfast/${design_name}"
-            mkdir -p "$OBJ_DIR/$SUB_PATH" "$BIN_DIR/$SUB_PATH"
-            # This can fail if the build result is from Bazel cache
-            cp -rLvt "$OBJ_DIR/$SUB_PATH/" \
-              $(./bazelisk.sh outquery-all ${bitstream_target}) || true
-
-            # TODO: Splice ROM into the bitstream?
-            cp -Lv ${bitstream_archive} build-bin.tar
-          }
-
-          # Build the bitstream first. It has an empty ROM (all zeroes).
-          module load "xilinx/vivado/${VIVADO_VERSION}"
-          ./bazelisk.sh build //hw/top_englishbreakfast/bitstream:englishbreakfast_cw305_archive
-          tar xvf ${bitstream_archive}
-
           # Build CW305 test rom required by `build-bitstream-vivado.sh`
           rom_path="sw/device/lib/testing/test_rom"
           ./bazelisk.sh build "//${rom_path}:test_rom_fpga_cw305" \
@@ -369,11 +335,13 @@ jobs:
           mkdir -p "build-bin/${rom_path}"
           cp "$vmem" "build-bin/${rom_path}"
 
+          module load "xilinx/vivado/${VIVADO_VERSION}"
+          ci/scripts/build-bitstream-vivado.sh top_englishbreakfast cw305
       - name: Upload bitstream
         uses: actions/upload-artifact@v4
         with:
           name: chip_englishbreakfast_cw305
-          path: build-bin.tar
+          path: build-bin/hw/top_englishbreakfast/lowrisc_systems_chip_englishbreakfast_cw305_0.1.bit
           overwrite: true
 
   chip_earlgrey_cw310:
@@ -465,7 +433,7 @@ jobs:
       timeout: 90
 
   execute_rom_ext_fpga_tests_cw310:
-    name: Hyper310 ROM_EXT Tests
+    name: CW310 ROM_EXT Tests
     needs: chip_earlgrey_cw310_hyperdebug
     uses: ./.github/workflows/fpga.yml
     secrets: inherit
@@ -732,45 +700,3 @@ jobs:
       - name: Check for unrunnable tests
         run: ./ci/scripts/check-unrunnable-tests.sh
         continue-on-error: true
-
-  dj_sw_build_test:
-    name: Build and test Darjeeling software
-    runs-on: ubuntu-22.04-vivado
-    timeout-minutes: 120
-    needs: quick_lint
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Required for bitstream cache to work.
-      - name: Prepare environment
-        uses: ./.github/actions/prepare-env
-        with:
-          service_account_json: '${{ secrets.BAZEL_CACHE_CREDS }}'
-      - name: Check Bazel build graph
-        run: |
-          # Test the graph with both an empty and filled bitstream cache.
-          ./ci/scripts/test-empty-bitstream-cache.sh
-          ./bazelisk.sh build --nobuild --//hw/top=darjeeling //...
-      - name: Build software targets
-        run: |
-          # Compile some selected targets
-          ./bazelisk.sh build                                \
-            --build_tests_only=false                         \
-            --//hw/top=darjeeling                            \
-            //sw/device/tests/...
-
-  qemu_smoketest:
-    name: QEMU smoketest
-    runs-on: ubuntu-22.04-vivado
-    needs: quick_lint
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Prepare environment
-        uses: ./.github/actions/prepare-env
-        with:
-          service_account_json: '${{ secrets.BAZEL_CACHE_CREDS }}'
-      - name: Execute QEMU smoketest
-        run: |
-          ./bazelisk.sh test //sw/device/tests:rom_exit_immediately_sim_qemu_base

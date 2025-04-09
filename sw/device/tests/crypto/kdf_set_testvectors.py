@@ -69,6 +69,7 @@ def main() -> int:
         t["key_derivation_key"] = t["key"]
         t["context"] = t["input_msg"]
         t["label"] = t["cust_str"]
+        t["keying_material"] = t["digest"]
 
         if t["security_str"] == 128:
             t["test_operation"] = "kKdfTestOperationKmac128"
@@ -84,7 +85,8 @@ def main() -> int:
         t["keyblob"] += ["0x00000000"] * len(t["keyblob"])
 
         # Derived key material also needs to have word granularity
-        t["expected_output"] = str_to_hex_array(t["digest"], return_byte_array = False)
+        t["km_keyblob"] = str_to_hex_array(t["keying_material"], return_byte_array = False)
+        t["km_keyblob"] += ["0x00000000"] * len(t["km_keyblob"])
 
     args.headerfile.write(Template(args.template.read()).render(tests=testvecs))
     args.headerfile.close()

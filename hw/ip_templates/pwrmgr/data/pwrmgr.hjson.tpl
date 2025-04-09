@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 <%
  # Additional reset
- int_reset_reqs = rst_reqs.get("int", [])
- debug_reset_reqs = rst_reqs.get("debug", [])
- src_clks_core = sorted('core' if clk == 'main' else clk for clk in src_clks)
+ int_reset_reqs = rst_reqs["int"]
+ debug_reset_reqs = rst_reqs["debug"]
 %>\
 {
   name:               "pwrmgr",
@@ -183,7 +182,7 @@
       type:    "req_rsp",
       name:    "pwr_lc",
       act:     "req",
-      package: "lc_ctrl_pkg",
+      package: "pwrmgr_pkg",
     },
 
     { struct:  "pwr_flash",
@@ -333,20 +332,6 @@
       default: "${NumRomInputs}",
       local: "true"
     },
-    {
-      name: "EscNumSeverities"
-      desc: "Number of escalation severities"
-      type: "int"
-      default: "4"
-      local: "false"
-    },
-    {
-      name: "EscPingCountWidth"
-      desc: "Width of ping count for the escalation receiver"
-      type: "int"
-      default: "16"
-      local: "false"
-    },
 
     % for req in int_reset_reqs + debug_reset_reqs:
     { name: "${f"Reset{req['name']}Idx"}",
@@ -478,40 +463,70 @@
           "excl:CsrAllTests:CsrExclAll"]
         },
 
-<% clk_bits = len(src_clks_core) %>\
-% for i, src in enumerate(src_clks_core):
-        { bits: "${4 + i}",
-          name: "${src.upper()}_CLK_EN${'_LP' if src == 'usb' else ''}",
-          desc: "${src.capitalize() if src == 'core' else src.upper()} clock enable during low power state",
+        { bits: "4",
+          name: "CORE_CLK_EN",
+          desc: "core clock enable during low power state",
+          resval: "0"
+          enum: [
+            { value: "0",
+              name: "Disabled",
+              desc: '''
+                Core clock disabled during low power state
+                '''
+            },
+            { value: "1",
+              name: "Enabled",
+              desc: '''
+                Core clock enabled during low power state
+                '''
+            },
+          ]
+        },
+
+        { bits: "5",
+          name: "IO_CLK_EN",
+          desc: "IO clock enable during low power state",
+          resval: "0"
+          enum: [
+            { value: "0",
+              name: "Disabled",
+              desc: '''
+                IO clock disabled during low power state
+                '''
+            },
+            { value: "1",
+              name: "Enabled",
+              desc: '''
+                IO clock enabled during low power state
+                '''
+            },
+          ]
+        },
+
+        { bits: "6",
+          name: "USB_CLK_EN_LP",
+          desc: "USB clock enable during low power state",
           resval: "0",
           enum: [
             { value: "0",
               name: "Disabled",
               desc: '''
-                    ${src.capitalize() if src == 'core' else src.upper()} clock disabled during low power state
-                    '''
+                USB clock disabled during low power state
+                '''
             },
             { value: "1",
               name: "Enabled",
-<%
-usb_enabled_text = ('''USB clock enabled during low power state.
-
-                    However, if !!CONTROL.MAIN_PD_N is 0, USB clock is disabled
-                    during low power state.''')
-desc = (usb_enabled_text if src == 'usb' else
-        ((src.capitalize() if src == 'core' else src.upper()) + " clock enabled during low power state"))
-%>\
               desc: '''
-	            ${desc}
-		    '''
+                USB clock enabled during low power state.
+
+                However, if !!CONTROL.MAIN_PD_N is 0, USB clock is disabled
+                during low power state.
+                '''
             },
           ]
         },
 
-% endfor
-% if 'usb' in src_clks:
-<% clk_bits += 1 %>\
-        { bits: "${4 + len(src_clks)}",
+        { bits: "7",
           name: "USB_CLK_EN_ACTIVE",
           desc: "USB clock enable during active power state",
           resval: "1"
@@ -531,8 +546,7 @@ desc = (usb_enabled_text if src == 'usb' else
           ]
         },
 
-% endif
-        { bits: "${4 + clk_bits}",
+        { bits: "8",
           name: "MAIN_PD_N",
           desc: "Active low, main power domain power down",
           resval: "1"
@@ -551,6 +565,8 @@ desc = (usb_enabled_text if src == 'usb' else
             },
           ]
         },
+
+
       ],
     },
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
-load("@rules_rust_bindgen//:defs.bzl", "rust_bindgen", "rust_bindgen_library")
+load("@rules_rust//bindgen:defs.bzl", "rust_bindgen", "rust_bindgen_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -254,6 +254,7 @@ rust_bindgen_library(
         "--allowlist-function=status_err",
         "--allowlist-function=status_ok",
         "--generate-inline-functions",
+        "--with-derive-custom=ot_status_create_record=zerocopy::FromZeroes",
         "--with-derive-custom=ot_status_create_record=zerocopy::FromBytes",
     ],
     cc_lib = "//sw/device/lib/base:status",

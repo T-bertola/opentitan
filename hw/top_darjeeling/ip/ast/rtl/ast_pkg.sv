@@ -83,6 +83,7 @@ typedef logic awire_t;
 typedef struct packed {
   logic clk_sys;
   logic clk_io;
+  logic clk_usb;
   logic clk_aon;
 } ast_clks_t;
 

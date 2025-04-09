@@ -12,16 +12,6 @@ package keymgr_dpe_pkg;
   parameter int DpeNumSlotsWidth = prim_util_pkg::vbits(DpeNumSlots);
   parameter int DpeNumBootStagesWidth = $clog2(DpeNumBootStages);
 
-  // keymgr and keymgr_dpe have different maximum KMAC input widths. The below widths correspond to
-  // the following inputs to advance to the creator root key state:
-  //   - Software binding
-  //   - Revision seed
-  //   - OTP device ID
-  //   - LC keymgr diversification value
-  //   - ROM digests
-  //   - Creator seed
-  parameter int DpeAdvDataWidth = SwBindingWidth + KeyWidth + otp_ctrl_pkg::DeviceIdWidth +
-      lc_ctrl_pkg::LcKeymgrDivWidth + KeyWidth*keymgr_dpe_reg_pkg::NumRomDigestInputs + KeyWidth;
 
   typedef logic [DpeNumSlotsWidth-1:0] keymgr_dpe_slot_idx_e;
 
@@ -80,9 +70,9 @@ package keymgr_dpe_pkg;
 
   // TODO(#354): Define further policy bits and extend this struct
   typedef struct packed {
-    logic retain_parent;
-    logic exportable;
     logic allow_child;
+    logic exportable;
+    logic retain_parent;
   } keymgr_dpe_policy_t;
 
   // An internal secret key slot
@@ -105,9 +95,9 @@ package keymgr_dpe_pkg;
   } keymgr_dpe_key_update_e;
 
   localparam keymgr_dpe_policy_t DEFAULT_UDS_POLICY = '{
-    retain_parent : 1'b0,
+    allow_child   : 1'b1,
     exportable    : 1'b0,
-    allow_child   : 1'b1
+    retain_parent : 1'b0
   };
 
   // Keymgr_dpe requires more lc_en copies than keymgr

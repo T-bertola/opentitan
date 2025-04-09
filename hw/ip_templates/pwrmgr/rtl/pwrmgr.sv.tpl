@@ -4,7 +4,6 @@
 //
 // Power Manager
 //
-<% longest_src_clk = max(len(c) for c in src_clks) %>\
 
 `include "prim_assert.sv"
 
@@ -12,9 +11,7 @@ module pwrmgr
   import pwrmgr_pkg::*;
   import pwrmgr_reg_pkg::*;
 #(
-  parameter logic [NumAlerts-1:0] AlertAsyncOn = {NumAlerts{1'b1}},
-  parameter int unsigned EscNumSeverities = 4,
-  parameter int unsigned EscPingCountWidth = 16
+  parameter logic [NumAlerts-1:0] AlertAsyncOn = {NumAlerts{1'b1}}
 ) (
   // Clocks and resets
   input clk_slow_i,
@@ -52,8 +49,8 @@ module pwrmgr
   output pwr_otp_req_t pwr_otp_o,
 
   // life cycle interface
-  input  lc_ctrl_pkg::pwr_lc_rsp_t pwr_lc_i,
-  output lc_ctrl_pkg::pwr_lc_req_t pwr_lc_o,
+  input  pwr_lc_rsp_t pwr_lc_i,
+  output pwr_lc_req_t pwr_lc_o,
 
   // flash interface
   input  pwr_flash_t pwr_flash_i,
@@ -139,8 +136,8 @@ module pwrmgr
 
   logic esc_rst_req_d, esc_rst_req_q;
   prim_esc_receiver #(
-    .N_ESC_SEV   (EscNumSeverities),
-    .PING_CNT_DW (EscPingCountWidth)
+    .N_ESC_SEV   (alert_handler_reg_pkg::N_ESC_SEV),
+    .PING_CNT_DW (alert_handler_reg_pkg::PING_CNT_DW)
   ) u_esc_rx (
     .clk_i(clk_esc),
     .rst_ni(rst_esc_n),
@@ -265,10 +262,8 @@ module pwrmgr
   logic ack_pwrdn;
   logic fsm_invalid;
   logic clr_slow_req;
-% if 'usb' in src_clks:
   logic usb_ip_clk_en;
   logic usb_ip_clk_status;
-% endif
   pwrup_cause_e pwrup_cause;
 
   logic low_power_fall_through;
@@ -305,17 +300,13 @@ module pwrmgr
   logic slow_ack_pwrdn;
   logic slow_fsm_invalid;
   logic slow_main_pd_n;
-% for clk in src_clks:
-  % if clk == 'usb':
+  logic slow_io_clk_en;
+  logic slow_core_clk_en;
   logic slow_usb_clk_en_lp;
   logic slow_usb_clk_en_active;
+  logic slow_clr_req;
   logic slow_usb_ip_clk_en;
   logic slow_usb_ip_clk_status;
-  % else:
-  logic slow_${clk}_clk_en;
-  % endif
-% endfor
-  logic slow_clr_req;
 
 
 
@@ -433,24 +424,18 @@ module pwrmgr
     .slow_wakeup_en_o(slow_wakeup_en),
     .slow_reset_en_o(slow_reset_en),
     .slow_main_pd_no(slow_main_pd_n),
-% for clk in src_clks:
-  % if clk == 'usb':
+    .slow_io_clk_en_o(slow_io_clk_en),
+    .slow_core_clk_en_o(slow_core_clk_en),
     .slow_usb_clk_en_lp_o(slow_usb_clk_en_lp),
     .slow_usb_clk_en_active_o(slow_usb_clk_en_active),
-  % else:
-    .slow_${clk}_clk_en_o(slow_${clk}_clk_en),
-  % endif
-% endfor
     .slow_req_pwrdn_o(slow_req_pwrdn),
     .slow_ack_pwrup_o(slow_ack_pwrup),
     .slow_ast_o(slow_ast),
     .slow_peri_reqs_o(slow_peri_reqs),
     .slow_peri_reqs_masked_i(slow_peri_reqs_masked),
     .slow_clr_req_o(slow_clr_req),
-% if 'usb' in src_clks:
     .slow_usb_ip_clk_en_i(slow_usb_ip_clk_en),
     .slow_usb_ip_clk_status_o(slow_usb_ip_clk_status),
-% endif
 
     // fast domain signals
     .req_pwrdn_i(req_pwrdn),
@@ -460,25 +445,18 @@ module pwrmgr
     .wakeup_en_i(reg2hw.wakeup_en),
     .reset_en_i(reg2hw.reset_en),
     .main_pd_ni(reg2hw.control.main_pd_n.q),
-% for clk in src_clks:
-  % if clk == 'usb':
+    .io_clk_en_i(reg2hw.control.io_clk_en.q),
+    .core_clk_en_i(reg2hw.control.core_clk_en.q),
     .usb_clk_en_lp_i(reg2hw.control.usb_clk_en_lp.q),
     .usb_clk_en_active_i(reg2hw.control.usb_clk_en_active.q),
-  % else:
-<% ral_clk = 'core' if clk == 'main' else clk %>\
-    .${clk}_clk_en_i(reg2hw.control.${ral_clk}_clk_en.q),
-  % endif
-% endfor
     .ack_pwrdn_o(ack_pwrdn),
     .fsm_invalid_o(fsm_invalid),
     .req_pwrup_o(req_pwrup),
     .pwrup_cause_o(pwrup_cause),
     .peri_reqs_o(peri_reqs_masked),
     .clr_slow_req_i(clr_slow_req),
-% if 'usb' in src_clks:
     .usb_ip_clk_en_o(usb_ip_clk_en),
     .usb_ip_clk_status_i(usb_ip_clk_status),
-% endif
 
     // AST signals
     .ast_i(pwr_ast_i),
@@ -551,12 +529,20 @@ module pwrmgr
                                           {NumIntRstReqs{1'b1}},
                                           slow_reset_en};
 % if wait_for_external_reset:
+  // TODO(#22711): Make this work also when `rstreqs` is structured differently.
   logic strap_sampled;
   logic internal_reset_req;
   logic ext_reset_req;
 
-  // Make the SoC see what the slow FSM sees to to generate the light_reset to the SoC
-  assign internal_reset_req = |slow_peri_reqs_masked.rstreqs;
+  assign internal_reset_req            =|(
+                                         slow_peri_reqs.rstreqs &
+                                         {{NumSwRstReq{1'b1}},      // SW driven reset
+                                          {NumDebugRstReqs{1'b1}},  // debugger reset
+                                          {NumIntRstReqs{1'b1}},    // {ESC reset, slow_fsm}
+                                          // exclude the external async reset
+                                          {1'b0, slow_reset_en[0]}
+                                         }
+                                        );
 
   // The MSB of `slow_peri_reqs.rstreqs` is the external reset request. We want it to always
   // propagate, in order to continue from the Reset Wait state in the fast FSM.
@@ -597,21 +583,14 @@ module pwrmgr
     .rst_req_o            (slow_rst_req),
     .fsm_invalid_o        (slow_fsm_invalid),
     .clr_req_i            (slow_clr_req),
-% if 'usb' in src_clks:
     .usb_ip_clk_en_o      (slow_usb_ip_clk_en),
     .usb_ip_clk_status_i  (slow_usb_ip_clk_status),
-% endif
 
     .main_pd_ni           (slow_main_pd_n),
-% for clk in src_clks:
-  % if clk != 'usb':
-<% sep = " " * (12 - len(clk)) %>\
-    .${clk}_clk_en_i${sep}(slow_${clk}_clk_en),
-  % else:
+    .io_clk_en_i          (slow_io_clk_en),
+    .core_clk_en_i        (slow_core_clk_en),
     .usb_clk_en_lp_i      (slow_usb_clk_en_lp),
     .usb_clk_en_active_i  (slow_usb_clk_en_active),
-  % endif
-% endfor
 
     // outputs to AST - These are on the slow clock domain
     // TBD - need to check this with partners
@@ -657,10 +636,8 @@ module pwrmgr
     .reset_reqs_i        (peri_reqs_masked.rstreqs),
     .fsm_invalid_i       (fsm_invalid),
     .clr_slow_req_o      (clr_slow_req),
-% if 'usb' in src_clks:
     .usb_ip_clk_en_i     (usb_ip_clk_en),
     .usb_ip_clk_status_o (usb_ip_clk_status),
-% endif
 
     // cfg
     .main_pd_ni        (reg2hw.control.main_pd_n.q),

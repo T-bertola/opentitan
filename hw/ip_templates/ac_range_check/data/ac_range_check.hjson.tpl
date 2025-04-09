@@ -2,12 +2,9 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 //
-<%
-import math
-%>\
 # AC Range Check register template
 {
-  name:               "${module_instance_name}"
+  name:               "ac_range_check"
   human_name:         "Access Control Range Check"
   one_line_desc:      "Access Control Range Check."
   one_paragraph_desc: '''
@@ -19,7 +16,7 @@ import math
 
   clocking: [{clock: "clk_i", reset: "rst_ni", primary: true}]
   bus_interfaces: [
-    { protocol: "tlul", direction: "device", hier_path: "u_ac_range_check_reg", racl_support: true }
+    { protocol: "tlul", direction: "device", hier_path: "u_ac_range_check_reg" }
   ]
   param_list: [
     { name:    "NumRanges",
@@ -28,27 +25,16 @@ import math
       default: "${num_ranges}",
     },
     { name:    "DenyCountWidth",
-      desc:    "Width of the deny counter",
+      desc:    "Witdth of the deny counter",
       type:    "int",
       default: "8",
       local:   "true"
-    },
-    { name:    "RangeCheckErrorRsp",
-      desc:    '''
-        Error behavior on blocked requests:
-        1: A denied request returns a TLUL error (.d_error = 1 on the response)
-        0: Writes are dropped and reads return all-zero, without a TLUL error
-        ''',
-      type:    "bit",
-      default: "1",
-      local:   "false"
-      expose:  "true"
     },
   ],
   inter_signal_list: [
     { name:    "range_check_overwrite"
       type:    "uni",
-      act:     "rcv",
+      act:     "req",
       package: "prim_mubi_pkg",
       struct:  "mubi8",
       width:   "1"
@@ -82,26 +68,6 @@ import math
       act:     "rcv"
       desc:    "Filtered TL-UL output port (response part), synchronous"
     }
-    { struct:  "racl_policy_vec",
-      type:    "uni",
-      name:    "racl_policies",
-      act:     "rcv",
-      package: "top_racl_pkg",
-      desc:    '''
-        Incoming RACL policy vector from a racl_ctrl instance.
-        The policy selection vector (parameter) selects the policy for each register.
-      '''
-    }
-    { struct:  "racl_error_log",
-      type:    "uni",
-      name:    "racl_error",
-      act:     "req",
-      width:   "1"
-      package: "top_racl_pkg",
-      desc:    '''
-        RACL error log information of this module.
-      '''
-    }
   ]
   interrupt_list: [
     { name: "deny_cnt_reached"
@@ -123,46 +89,6 @@ import math
   ]
   regwidth: "32"
   registers: [
-    { name: "ALERT_STATUS"
-      desc: "Status of hardware alerts."
-      swaccess: "ro"
-      hwaccess: "hwo"
-      fields: [
-        { bits: "0"
-          name: "SHADOWED_UPDATE_ERR"
-          resval: "0"
-          swaccess: "rc"
-          desc: '''Update error of a shadowed register.
-                   This is a recoverable error caused by SW misbehavior.
-                   This field gets cleared by a SW read.
-                '''
-        }
-        { bits: "1"
-          name: "SHADOWED_STORAGE_ERR"
-          resval: "0"
-          desc: '''Storage error of a shadowed register.
-                   This is a fatal error.
-                   Once set, this field remains set until this HW IP block gets reset.
-                '''
-        }
-        { bits: "2"
-          name: "REG_INTG_ERR"
-          resval: "0"
-          desc: '''Integrity error in the register interface.
-                   This is a fatal error.
-                   Once set, this field remains set until this HW IP block gets reset.
-                '''
-        }
-        { bits: "3"
-          name: "COUNTER_ERR"
-          resval: "0"
-          desc: '''Integrity error in a counter.
-                   This is a fatal error.
-                   Once set, this field remains set until this HW IP block gets reset.
-                '''
-        }
-      ]
-    }
     { name: "LOG_CONFIG"
       desc: ""
       swaccess: "rw"
@@ -176,8 +102,7 @@ import math
         { bits: "1"
           name: "log_clear"
           resval: 0x0
-          hwqe: "true"
-          desc: '''Clears all log information for the first denied access including:
+          desc: '''Clears all log information for the first denied access including: 
                     - LOG_STATUS
                     - LOG_ADDRESS.
           '''
@@ -191,28 +116,18 @@ import math
     }
     { name: "LOG_STATUS"
       desc: '''
-            The LOG_STATUS register stores the number of denied accesses and gives more detailed diagnostics to the first denied request.
+            The LOG_STATUS register stores the number of denied accesses and gives more detailed diagnostics to the first denied request. 
             All fields of LOG_STATUS (other than deny_cnt) are only valid if deny_cnt > 0.
             '''
       swaccess: "ro"
       hwaccess: "hwo"
       fields: [
-<%
-  denied_ctn_uid_lsb = 14 + nr_role_bits
-  deny_range_index_lsb = denied_ctn_uid_lsb + nr_ctn_uid_bits
-  deny_range_index_size = math.ceil(math.log(num_ranges, 2))
-%>\
-        { bits: "${deny_range_index_lsb+deny_range_index_size-1}:${deny_range_index_lsb}"
+        { bits: "22:18"
           name: "deny_range_index"
           resval: 0x0
           desc: "Index of the range that caused the denied access."
         }
-        { bits: "${deny_range_index_lsb-1}:${denied_ctn_uid_lsb}"
-          name: "denied_ctn_uid"
-          resval: 0x0
-          desc: "Source CTN UID that was denied access."
-        }
-        { bits: "${denied_ctn_uid_lsb-1}:14"
+        { bits: "17:14"
           name: "denied_source_role"
           resval: 0x0
           desc: "Source RACL role that was denied access."
@@ -274,7 +189,7 @@ import math
     { multireg: {
         name: "RANGE_REGWEN"
         desc: '''
-              This register exists per range and provides a regwen signal for the RANGE_BASE_x, RANGE_LIMIT_x, RANGE_ATTR_x, and RANGE_RACL_POLICY_SHADOWED_x register.
+              This register exists per range and provides a regwen signal for the RANGE_BASE_x, RANGE_LIMIT_x, RANGE_PERM_x, and RANGE_RACL_POLICY_SHADOWED_x register. 
               When cleared to Mubi4::False, the corresponding range configuration registers are locked and cannot be changed until the next reset.
               '''
         count: "NumRanges"
@@ -287,7 +202,7 @@ import math
             resval: true
             mubi: true
             name: "regwen"
-            desc: "Clearing this register locks the configuration registers of that range until the next reset."
+            desc: "Clearing this register, locks the confgiguration registers of that range until the next reset."
           }
         ]
       }
@@ -318,7 +233,7 @@ import math
     { multireg: {
         name: "RANGE_LIMIT"
         desc: '''
-              The (exclusive) limit address register used for the address matching.
+              The (exclusive) limit address register used for the address matching. 
               '''
         count: "NumRanges"
         cname: "BASE"
@@ -336,11 +251,11 @@ import math
       }
     }
     { multireg: {
-        name: "RANGE_ATTR"
+        name: "RANGE_PERM"
         desc: '''
-              Attributes of the range.
-              This register exists per range and determines attributes (including permissions) of the particular range.
-              A range and its attributes are only considered if its `enable` field in this register is not set to `Mubi4::False`.
+              Permission configuration of the range.
+              The permission register exists per range and determines the access permissions of the particular range.
+              If it is not enabled, the range is not considered during the range check.
               '''
         count: "NumRanges"
         cname: "BASE"
@@ -374,7 +289,7 @@ import math
             resval: false
           }
           { name: "enable"
-            desc: "When set to Mubi4::False, the range is _not_ considered in the range check; for any other value, the range _is_ considered in the range check."
+            desc: "When set to Mubi4::True, the range is considered in the range check."
             bits: "3:0"
             mubi: true
             resval: false
@@ -385,9 +300,9 @@ import math
     { multireg: {
         name: "RANGE_RACL_POLICY_SHADOWED"
         desc: '''
-              The RACL policy register allows the system to further restrict the access to specific source roles.
-              The default value for both the read and write permission bitmaps is to deny access for all roles.
-              This register is protected against fault attacks by using a shadow register implementation.
+              The RACL policy register exists and allows the system to further restrict the access to specific source roles.
+              The default value for both the read and write permission bitmap is set to a value to allow the access from all roles.
+              This register is protected against fault attacks by using a shadow register implementation. 
               '''
         count: "NumRanges"
         cname: "RACL"
@@ -396,8 +311,6 @@ import math
         regwen: "RANGE_REGWEN"
         regwen_multi: true
         shadowed: "true",
-        update_err_alert: "recov_ctrl_update_err",
-        storage_err_alert: "fatal_fault",
         fields: [
           { name: "write_perm"
             desc: "Write permission policy bitmap."

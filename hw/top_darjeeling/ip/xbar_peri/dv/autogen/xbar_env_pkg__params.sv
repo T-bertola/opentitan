@@ -14,7 +14,7 @@ tl_device_t xbar_devices[$] = '{
         '{32'h30080000, 32'h3008007f}
     }},
     '{"gpio", '{
-        '{32'h30000000, 32'h300000ff}
+        '{32'h30000000, 32'h3000007f}
     }},
     '{"spi_host0", '{
         '{32'h30300000, 32'h3030003f}
@@ -32,22 +32,25 @@ tl_device_t xbar_devices[$] = '{
         '{32'h30410000, 32'h3041007f}
     }},
     '{"clkmgr_aon", '{
-        '{32'h30420000, 32'h3042003f}
+        '{32'h30420000, 32'h3042007f}
     }},
     '{"pinmux_aon", '{
         '{32'h30460000, 32'h304607ff}
     }},
     '{"otp_ctrl__core", '{
-        '{32'h30130000, 32'h30137fff}
+        '{32'h30130000, 32'h30130fff}
     }},
     '{"otp_ctrl__prim", '{
-        '{32'h30140000, 32'h3014001f}
+        '{32'h30138000, 32'h3013801f}
     }},
     '{"lc_ctrl__regs", '{
-        '{32'h30150000, 32'h301500ff}
+        '{32'h30140000, 32'h301400ff}
+    }},
+    '{"sensor_ctrl", '{
+        '{32'h30020000, 32'h3002003f}
     }},
     '{"alert_handler", '{
-        '{32'h30160000, 32'h301607ff}
+        '{32'h30150000, 32'h301507ff}
     }},
     '{"sram_ctrl_ret_aon__regs", '{
         '{32'h30500000, 32'h3050003f}
@@ -62,7 +65,7 @@ tl_device_t xbar_devices[$] = '{
         '{32'h30480000, 32'h304803ff}
     }},
     '{"soc_dbg_ctrl__core", '{
-        '{32'h30170000, 32'h3017001f}
+        '{32'h30160000, 32'h3016001f}
 }}};
 
   // List of Xbar hosts
@@ -81,6 +84,7 @@ tl_host_t xbar_hosts[$] = '{
         "otp_ctrl__core",
         "otp_ctrl__prim",
         "lc_ctrl__regs",
+        "sensor_ctrl",
         "alert_handler",
         "ast",
         "sram_ctrl_ret_aon__ram",

@@ -251,6 +251,7 @@ class cip_base_vseq #(
 
     cip_tl_host_single_seq tl_seq;
     `uvm_create_on(tl_seq, tl_sequencer_h)
+    tl_seq.instr_type = instr_type;
     tl_seq.tl_intg_err_type = tl_intg_err_type;
     if (cfg.zero_delays) begin
       tl_seq.min_req_delay = 0;
@@ -258,11 +259,10 @@ class cip_base_vseq #(
     end
     tl_seq.req_abort_pct = req_abort_pct;
     `DV_CHECK_RANDOMIZE_WITH_FATAL(tl_seq,
-        addr        == local::addr;
-        write       == local::write;
-        mask        == local::mask;
-        data        == local::data;
-        instr_type  == local::instr_type;)
+        addr  == local::addr;
+        write == local::write;
+        mask  == local::mask;
+        data  == local::data;)
 
     csr_utils_pkg::increment_outstanding_access();
     fork begin : isolation_fork
@@ -446,11 +446,6 @@ class cip_base_vseq #(
       end
     end
 
-    // Checking the intr_test register works only makes sense if there is at least one interrupt
-    // register. We shouldn't call this sequence for blocks that don't have one, so let's fail
-    // understandably if we have done so by accident.
-    `DV_CHECK(intr_csrs.size() > 0, "Called intr_test vseq without any interrupt register.")
-
     num_times = num_times * intr_csrs.size();
     for (int trans = 1; trans <= num_times; trans++) begin
       bit [BUS_DW-1:0] num_used_bits;
@@ -463,7 +458,6 @@ class cip_base_vseq #(
         uvm_reg_data_t data = $urandom();
         `uvm_info(`gfn, $sformatf("Write %s: 0x%0h", intr_csrs[i].`gfn, data), UVM_MEDIUM)
         csr_wr(.ptr(intr_csrs[i]), .value(data));
-        if (cfg.under_reset) break;
       end
 
       // Read all intr related csr and check interrupt pins
@@ -485,23 +479,19 @@ class cip_base_vseq #(
         csr_rd(.ptr(intr_csrs[i]), .value(act_val));
         act_val &= ~irq_ro_mask;
 
-        if (cfg.under_reset) break;
-        `uvm_info(`gfn, $sformatf("Read %s: 0x%0h", intr_csrs[i].get_full_name(), act_val),
-                  UVM_MEDIUM)
-        if (intr_csrs[i].get_predicted_mask() == 0) begin
-          `DV_CHECK_EQ(exp_val, act_val, {"when reading the intr CSR ",
-                                          intr_csrs[i].get_full_name()})
+        if (cfg.under_reset) continue;
+        `uvm_info(`gfn, $sformatf("Read %s: 0x%0h", intr_csrs[i].`gfn, act_val), UVM_MEDIUM)
+        `DV_CHECK_EQ(exp_val, act_val, {"when reading the intr CSR", intr_csrs[i].`gfn})
 
-          // if it's intr_state, also check the interrupt pin value
-          if (!uvm_re_match("intr_state*", intr_csrs[i].get_name())) begin
-            interrupt_t exp_intr_pin = intr_csrs[i].get_intr_pins_exp_value();
-            interrupt_t act_intr_pin = cfg.intr_vif.sample();
-            act_intr_pin &= interrupt_t'((1 << cfg.num_interrupts) - 1);
-            `DV_CHECK_CASE_EQ(exp_intr_pin, act_intr_pin)
-          end // if (!uvm_re_match
-        end
+        // if it's intr_state, also check the interrupt pin value
+        if (!uvm_re_match("intr_state*", intr_csrs[i].get_name())) begin
+          interrupt_t exp_intr_pin = intr_csrs[i].get_intr_pins_exp_value();
+          interrupt_t act_intr_pin = cfg.intr_vif.sample();
+          act_intr_pin &= interrupt_t'((1 << cfg.num_interrupts) - 1);
+          `DV_CHECK_CASE_EQ(exp_intr_pin, act_intr_pin)
+        end // if (!uvm_re_match
       end // foreach (intr_csrs[i])
-    end
+    end // for (int trans = 1; ...
     // Write 0 to intr_test to clean up status interrupts, otherwise, status interrupts may remain
     // active. And writing any value to a status interrupt CSR (intr_state) can't clear its value.
     foreach (intr_test_csrs[i]) begin
@@ -566,37 +556,20 @@ class cip_base_vseq #(
         fork
           wait(!cfg.clk_rst_vif.rst_n);
           begin
+            // This task wait for recoverable alerts handshake to complete, or fatal alert being
+            // triggered once by `alert_test` register.
+            cfg.clk_rst_vif.wait_clks(max_alert_handshake_cycles);
             foreach (cfg.m_alert_agent_cfgs[alert_name]) begin
-              automatic string local_alert_name = alert_name;
-              automatic alert_esc_agent_cfg local_alert_agent_cfg =
-                cfg.m_alert_agent_cfgs[alert_name];
-              automatic int unsigned ping_count = local_alert_agent_cfg.ping_count;
-              fork
-                begin
-                  // This task waits for recoverable alerts handshake to complete, or fatal alert
-                  // being triggered once by `alert_test` register.
-                  cfg.clk_rst_vif.wait_clks(max_alert_handshake_cycles);
-                  `DV_SPINWAIT(local_alert_agent_cfg.vif.wait_ack_complete();)
-
-                  repeat(check_cycles) begin
-                    cfg.clk_rst_vif.wait_clks(1);
-                    // The alert agent sends a periodic Ping sequence. If there's been a ping since
-                    // this check was started, there may be an alert, in which the check is skipped.
-                    if (ping_count == local_alert_agent_cfg.ping_count) begin
-                      `DV_CHECK_EQ(0, local_alert_agent_cfg.vif.get_alert(),
-                                   $sformatf("Alert %0s fired unexpectedly!", alert_name))
-                    end
-                    else begin
-                      `uvm_info(`gfn, {"Not checking alerts: There's been",
-                                       " a periodic ping since this check",
-                                       " was started which caused an alert"},
-                                       UVM_DEBUG)
-                    end
-                  end
-                end
-              join_none
+              `DV_SPINWAIT(cfg.m_alert_agent_cfgs[alert_name].vif.wait_ack_complete();)
             end
-            wait fork;
+
+            repeat(check_cycles) begin
+              cfg.clk_rst_vif.wait_clks(1);
+              foreach (cfg.m_alert_agent_cfgs[alert_name]) begin
+                `DV_CHECK_EQ(0, cfg.m_alert_agent_cfgs[alert_name].vif.get_alert(),
+                             $sformatf("Alert %0s fired unexpectedly!", alert_name))
+              end
+            end
           end
         join_any
         disable fork;
@@ -626,7 +599,7 @@ class cip_base_vseq #(
           if (alert_req[i]) begin
             // if previous alert_handler just finish, there is a max of two clock_cycle
             // pause in between
-            wait_alert_trigger(alert_name, .max_wait_cycle(4));
+            wait_alert_trigger(alert_name, .max_wait_cycle(2));
 
             // write alert_test during alert handshake will be ignored
             if ($urandom_range(1, 10) == 10) begin
@@ -986,12 +959,7 @@ class cip_base_vseq #(
       `DV_SPINWAIT_EXIT(
           forever begin
             // 1 extra cycle to make sure no race condition
-            // Plus 2 extra cycles due to alert sampling delay of 2 cycles at the VIF
-            for (int i = 0; i <  (alert_esc_agent_pkg::ALERT_B2B_DELAY + 1 + 2); i++) begin
-              if (cfg.m_alert_agent_cfgs[alert_name].active_ping) begin
-                wait (cfg.m_alert_agent_cfgs[alert_name].active_ping==0);
-                i = 0; // restart the delay, since alert may take longer now ping is happening
-              end
+            repeat (alert_esc_agent_pkg::ALERT_B2B_DELAY + 1) begin
               cfg.clk_rst_vif.wait_n_clks(1);
               if (cfg.m_alert_agent_cfgs[alert_name].vif.get_alert() == 1) break;
             end

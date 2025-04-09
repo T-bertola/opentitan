@@ -6,11 +6,9 @@
 #define OPENTITAN_SW_DEVICE_SILICON_CREATOR_LIB_CERT_DICE_CHAIN_H_
 
 #include "sw/device/lib/base/macros.h"
-#include "sw/device/silicon_creator/lib/drivers/hmac.h"
 #include "sw/device/silicon_creator/lib/error.h"
 #include "sw/device/silicon_creator/lib/keymgr_binding_value.h"
 #include "sw/device/silicon_creator/lib/manifest.h"
-#include "sw/device/silicon_creator/lib/ownership/datatypes.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,19 +45,14 @@ rom_error_t dice_chain_attestation_creator(
 /**
  * Check the CDI_1 certificate and regenerate if invalid.
  *
+ * @param owner_measurement Pointer to the measurements to attest.
  * @param owner_manifest Pointer to the owner SW manifest to be boot.
- * @param bl0_measurement Pointer to the measurement of the owner firmware.
- * @param owner_measurement Pointer to the measurement of the owner config.
- * @param sealing_binding Pointer to the owner's sealing diversification
- *        constant.
- * @param key_domain Domain of the Owner SW signing key.
  * @return errors encountered during the operation.
  */
 OT_WARN_UNUSED_RESULT
 rom_error_t dice_chain_attestation_owner(
-    const manifest_t *owner_manifest, keymgr_binding_value_t *bl0_measurement,
-    hmac_digest_t *owner_measurement, keymgr_binding_value_t *sealing_binding,
-    owner_app_domain_t key_domain);
+    keymgr_binding_value_t *owner_measurement,
+    const manifest_t *owner_manifest);
 
 /**
  * Write back the certificate chain to flash if changed.

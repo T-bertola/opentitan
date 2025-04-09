@@ -10,7 +10,6 @@ use std::convert::TryFrom;
 use std::io::{Read, Write};
 
 use super::misc::{TlvHeader, TlvTag};
-use super::GlobalFlags;
 use crate::chip::boot_svc::BootSvcKind;
 use crate::with_unknown;
 
@@ -30,16 +29,11 @@ with_unknown! {
 
         // The rescue protocol-level commands are represented in big-endian order.
         Rescue = u32::from_be_bytes(*b"RESQ"),
-        RescueB = u32::from_be_bytes(*b"RESB"),
         Reboot = u32::from_be_bytes(*b"REBO"),
         GetBootLog = u32::from_be_bytes(*b"BLOG"),
         BootSvcReq = u32::from_be_bytes(*b"BREQ"),
         BootSvcRsp = u32::from_be_bytes(*b"BRSP"),
         OwnerBlock = u32::from_be_bytes(*b"OWNR"),
-        GetOwnerPage0 = u32::from_be_bytes(*b"OPG0"),
-        GetOwnerPage1 = u32::from_be_bytes(*b"OPG1"),
-        GetDeviceId = u32::from_be_bytes(*b"OTID"),
-        Wait = u32::from_be_bytes(*b"WAIT"),
     }
 }
 
@@ -47,10 +41,7 @@ with_unknown! {
 #[derive(Debug, Serialize, Deserialize, Annotate)]
 pub struct OwnerRescueConfig {
     /// Header identifying this struct.
-    #[serde(
-        skip_serializing_if = "GlobalFlags::not_debug",
-        default = "OwnerRescueConfig::default_header"
-    )]
+    #[serde(default)]
     pub header: TlvHeader,
     /// The type of rescue protocol to use (ie: Xmodem).
     pub rescue_type: RescueType,
@@ -65,7 +56,7 @@ pub struct OwnerRescueConfig {
 impl Default for OwnerRescueConfig {
     fn default() -> Self {
         Self {
-            header: Self::default_header(),
+            header: TlvHeader::new(TlvTag::Rescue, 0),
             rescue_type: RescueType::default(),
             start: 0u16,
             size: 0u16,
@@ -76,9 +67,6 @@ impl Default for OwnerRescueConfig {
 
 impl OwnerRescueConfig {
     const BASE_SIZE: usize = 16;
-    pub fn default_header() -> TlvHeader {
-        TlvHeader::new(TlvTag::Rescue, 0, "0.0")
-    }
     pub fn read(src: &mut impl Read, header: TlvHeader) -> Result<Self> {
         let rescue_type = RescueType(src.read_u32::<LittleEndian>()?);
         let start = src.read_u16::<LittleEndian>()?;
@@ -100,7 +88,6 @@ impl OwnerRescueConfig {
         let header = TlvHeader::new(
             TlvTag::Rescue,
             Self::BASE_SIZE + self.command_allow.len() * std::mem::size_of::<u32>(),
-            "0.0",
         );
         header.write(dest)?;
         dest.write_u32::<LittleEndian>(u32::from(self.rescue_type))?;
@@ -126,16 +113,10 @@ impl OwnerRescueConfig {
                 CommandTag::OwnershipUnlockRequest,
                 CommandTag::OwnershipActivateRequest,
                 CommandTag::Rescue,
-                CommandTag::RescueB,
-                CommandTag::Reboot,
                 CommandTag::GetBootLog,
                 CommandTag::BootSvcReq,
                 CommandTag::BootSvcRsp,
                 CommandTag::OwnerBlock,
-                CommandTag::GetOwnerPage0,
-                CommandTag::GetOwnerPage1,
-                CommandTag::GetDeviceId,
-                CommandTag::Wait,
             ],
             ..Default::default()
         }
@@ -148,13 +129,16 @@ mod test {
     use crate::util::hexdump::{hexdump_parse, hexdump_string};
 
     const OWNER_RESCUE_CONFIG_BIN: &str = "\
-00000000: 52 45 53 51 4c 00 00 00 58 4d 44 4d 20 00 64 00  RESQL...XMDM .d.\n\
+00000000: 52 45 53 51 38 00 00 00 58 4d 44 4d 20 00 64 00  RESQ8...XMDM .d.\n\
 00000010: 45 4d 50 54 4d 53 45 43 4e 45 58 54 55 4e 4c 4b  EMPTMSECNEXTUNLK\n\
-00000020: 41 43 54 56 51 53 45 52 42 53 45 52 47 4f 4c 42  ACTVQSERBSERGOLB\n\
-00000030: 51 45 52 42 50 53 52 42 52 4e 57 4f 30 47 50 4f  QERBPSRBRNWO0GPO\n\
-00000040: 31 47 50 4f 44 49 54 4f 54 49 41 57              1GPODITOTIAW\n\
+00000020: 41 43 54 56 51 53 45 52 47 4f 4c 42 51 45 52 42  ACTVQSERGOLBQERB\n\
+00000030: 50 53 52 42 52 4e 57 4f                          PSRBRNWO\n\
 ";
     const OWNER_RESCUE_CONFIG_JSON: &str = r#"{
+  header: {
+    identifier: "Rescue",
+    length: 56
+  },
   rescue_type: "Xmodem",
   start: 32,
   size: 100,
@@ -165,15 +149,10 @@ mod test {
     "OwnershipUnlockRequest",
     "OwnershipActivateRequest",
     "Rescue",
-    "RescueB",
     "GetBootLog",
     "BootSvcReq",
     "BootSvcRsp",
-    "OwnerBlock",
-    "GetOwnerPage0",
-    "GetOwnerPage1",
-    "GetDeviceId",
-    "Wait"
+    "OwnerBlock"
   ]
 }"#;
 
@@ -191,15 +170,10 @@ mod test {
                 CommandTag::OwnershipUnlockRequest,
                 CommandTag::OwnershipActivateRequest,
                 CommandTag::Rescue,
-                CommandTag::RescueB,
                 CommandTag::GetBootLog,
                 CommandTag::BootSvcReq,
                 CommandTag::BootSvcRsp,
                 CommandTag::OwnerBlock,
-                CommandTag::GetOwnerPage0,
-                CommandTag::GetOwnerPage1,
-                CommandTag::GetDeviceId,
-                CommandTag::Wait,
             ],
         };
 

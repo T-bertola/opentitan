@@ -50,7 +50,7 @@
     {clock: "scan_clk_i"}
   ]
   bus_interfaces: [
-    { protocol: "tlul", direction: "device", racl_support: true }
+    { protocol: "tlul", direction: "device" }
   ],
   available_input_list: [
     { name: "sck",     desc: "SPI Clock" },
@@ -283,7 +283,7 @@
       name:    "ram_cfg_sys2spi",
       act:     "rcv"
     }
-    { struct:  "ram_2p_cfg_rsp",
+    { struct:  "ram_2p_cfg",
       package: "prim_ram_2p_pkg",
       type:    "uni",
       name:    "ram_cfg_rsp_sys2spi",
@@ -295,7 +295,7 @@
       name:    "ram_cfg_spi2sys",
       act:     "rcv"
     }
-    { struct:  "ram_2p_cfg_rsp",
+    { struct:  "ram_2p_cfg",
       package: "prim_ram_2p_pkg",
       type:    "uni",
       name:    "ram_cfg_rsp_spi2sys",
@@ -318,26 +318,6 @@
       type:    "uni"
       name:    "sck_monitor"
       act:     "req"
-    }
-    { struct:  "racl_policy_vec",
-      type:    "uni",
-      name:    "racl_policies",
-      act:     "rcv",
-      package: "top_racl_pkg",
-      desc:    '''
-        Incoming RACL policy vector from a racl_ctrl instance.
-        The policy selection vector (parameter) selects the policy for each register.
-      '''
-    }
-    { struct:  "racl_error_log",
-      type:    "uni",
-      name:    "racl_error",
-      act:     "req",
-      width:   "1"
-      package: "top_racl_pkg",
-      desc:    '''
-        RACL error log information of this module.
-      '''
     }
   ],
   features: [

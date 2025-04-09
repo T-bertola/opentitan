@@ -9,8 +9,7 @@
 #include "sw/device/lib/crypto/impl/integrity.h"
 #include "sw/device/lib/crypto/impl/keyblob.h"
 #include "sw/device/lib/crypto/include/datatypes.h"
-#include "sw/device/lib/crypto/include/ecc_p256.h"
-#include "sw/device/lib/crypto/include/ecc_p384.h"
+#include "sw/device/lib/crypto/include/ecc.h"
 #include "sw/device/lib/runtime/log.h"
 #include "sw/device/lib/testing/test_framework/ujson_ottf.h"
 #include "sw/device/lib/ujson/ujson.h"
@@ -26,7 +25,7 @@ enum {
 
 static const otcrypto_key_config_t kP256PrivateKeyConfig = {
     .version = kOtcryptoLibVersion1,
-    .key_mode = kOtcryptoKeyModeEcdsaP256,
+    .key_mode = kOtcryptoKeyModeEcdsa,
     .key_length = kP256PrivateKeyBytes,
     .hw_backed = kHardenedBoolFalse,
     .security_level = kOtcryptoKeySecurityLevelLow,
@@ -34,20 +33,19 @@ static const otcrypto_key_config_t kP256PrivateKeyConfig = {
 
 static const otcrypto_key_config_t kP384PrivateKeyConfig = {
     .version = kOtcryptoLibVersion1,
-    .key_mode = kOtcryptoKeyModeEcdsaP384,
+    .key_mode = kOtcryptoKeyModeEcdsa,
     .key_length = kP384PrivateKeyBytes,
     .hw_backed = kHardenedBoolFalse,
     .security_level = kOtcryptoKeySecurityLevelLow,
 };
 
-int set_nist_p256_params(cryptotest_ecdsa_coordinate_t uj_qx,
-                         cryptotest_ecdsa_coordinate_t uj_qy,
-                         cryptotest_ecdsa_signature_t uj_signature,
-                         otcrypto_unblinded_key_t *public_key,
-                         p256_ecdsa_signature_t *signature_p256,
-                         p256_point_t *pub_p256,
-                         otcrypto_word32_buf_t *signature_mut,
-                         size_t *digest_len) {
+int set_nist_p256_params(
+    cryptotest_ecdsa_coordinate_t uj_qx, cryptotest_ecdsa_coordinate_t uj_qy,
+    cryptotest_ecdsa_signature_t uj_signature,
+    otcrypto_ecc_curve_type_t *curve_type, otcrypto_unblinded_key_t *public_key,
+    p256_ecdsa_signature_t *signature_p256, p256_point_t *pub_p256,
+    otcrypto_word32_buf_t *signature_mut, size_t *digest_len) {
+  *curve_type = kOtcryptoEccCurveTypeNistP256;
   if (uj_qx.coordinate_len > kP256CoordBytes) {
     LOG_ERROR(
         "Coordinate value qx too large for P256 (have = %d bytes, max = %d "
@@ -66,7 +64,7 @@ int set_nist_p256_params(cryptotest_ecdsa_coordinate_t uj_qx,
   memcpy(pub_p256->x, uj_qx.coordinate, uj_qx.coordinate_len);
   memset(pub_p256->y, 0, kP256CoordBytes);
   memcpy(pub_p256->y, uj_qy.coordinate, uj_qy.coordinate_len);
-  public_key->key_mode = kOtcryptoKeyModeEcdsaP256;
+  public_key->key_mode = kOtcryptoKeyModeEcdsa;
   public_key->key_length = sizeof(p256_point_t);
   public_key->key = (uint32_t *)pub_p256;
   *digest_len = kP256ScalarWords;
@@ -94,14 +92,13 @@ int set_nist_p256_params(cryptotest_ecdsa_coordinate_t uj_qx,
   return true;
 }
 
-int set_nist_p384_params(cryptotest_ecdsa_coordinate_t uj_qx,
-                         cryptotest_ecdsa_coordinate_t uj_qy,
-                         cryptotest_ecdsa_signature_t uj_signature,
-                         otcrypto_unblinded_key_t *public_key,
-                         p384_ecdsa_signature_t *signature_p384,
-                         p384_point_t *pub_p384,
-                         otcrypto_word32_buf_t *signature_mut,
-                         size_t *digest_len) {
+int set_nist_p384_params(
+    cryptotest_ecdsa_coordinate_t uj_qx, cryptotest_ecdsa_coordinate_t uj_qy,
+    cryptotest_ecdsa_signature_t uj_signature,
+    otcrypto_ecc_curve_type_t *curve_type, otcrypto_unblinded_key_t *public_key,
+    p384_ecdsa_signature_t *signature_p384, p384_point_t *pub_p384,
+    otcrypto_word32_buf_t *signature_mut, size_t *digest_len) {
+  *curve_type = kOtcryptoEccCurveTypeNistP384;
   if (uj_qx.coordinate_len > kP384CoordBytes) {
     LOG_ERROR(
         "Coordinate value qx too large for P384 (have = %d bytes, max = %d "
@@ -120,7 +117,7 @@ int set_nist_p384_params(cryptotest_ecdsa_coordinate_t uj_qx,
   memcpy(pub_p384->x, uj_qx.coordinate, uj_qx.coordinate_len);
   memset(pub_p384->y, 0, kP384CoordBytes);
   memcpy(pub_p384->y, uj_qy.coordinate, uj_qy.coordinate_len);
-  public_key->key_mode = kOtcryptoKeyModeEcdsaP384;
+  public_key->key_mode = kOtcryptoKeyModeEcdsa;
   public_key->key_length = sizeof(p384_point_t);
   public_key->key = (uint32_t *)pub_p384;
   *digest_len = kP384ScalarWords;
@@ -190,6 +187,7 @@ status_t interpret_verify_status(ujson_t *uj, otcrypto_status_t status,
 }
 
 status_t p256_sign(ujson_t *uj, cryptotest_ecdsa_private_key_t *uj_private_key,
+                   otcrypto_ecc_curve_t elliptic_curve,
                    otcrypto_hash_digest_t message_digest,
                    otcrypto_word32_buf_t signature_mut,
                    cryptotest_ecdsa_signature_t *uj_signature) {
@@ -205,8 +203,8 @@ status_t p256_sign(ujson_t *uj, cryptotest_ecdsa_private_key_t *uj_private_key,
   memcpy(private_key_masked.share1, uj_private_key->d1, kP256ScalarBytes);
   private_key.checksum = integrity_blinded_checksum(&private_key);
 
-  otcrypto_status_t status =
-      otcrypto_ecdsa_p256_sign(&private_key, message_digest, signature_mut);
+  otcrypto_status_t status = otcrypto_ecdsa_sign(
+      &private_key, message_digest, &elliptic_curve, signature_mut);
   if (status.value != kOtcryptoStatusValueOk) {
     return INTERNAL(status.value);
   }
@@ -225,6 +223,7 @@ status_t p256_sign(ujson_t *uj, cryptotest_ecdsa_private_key_t *uj_private_key,
 }
 
 status_t p384_sign(ujson_t *uj, cryptotest_ecdsa_private_key_t *uj_private_key,
+                   otcrypto_ecc_curve_t elliptic_curve,
                    otcrypto_hash_digest_t message_digest,
                    otcrypto_word32_buf_t signature_mut,
                    cryptotest_ecdsa_signature_t *uj_signature) {
@@ -240,8 +239,8 @@ status_t p384_sign(ujson_t *uj, cryptotest_ecdsa_private_key_t *uj_private_key,
   memcpy(private_key_masked.share1, uj_private_key->d1, kP384ScalarBytes);
   private_key.checksum = integrity_blinded_checksum(&private_key);
 
-  otcrypto_status_t status =
-      otcrypto_ecdsa_p384_sign(&private_key, message_digest, signature_mut);
+  otcrypto_status_t status = otcrypto_ecdsa_sign(
+      &private_key, message_digest, &elliptic_curve, signature_mut);
   if (status.value != kOtcryptoStatusValueOk) {
     return INTERNAL(status.value);
   }
@@ -280,6 +279,7 @@ status_t handle_ecdsa(ujson_t *uj) {
   TRY(ujson_deserialize_cryptotest_ecdsa_coordinate_t(uj, &uj_qy));
   TRY(ujson_deserialize_cryptotest_ecdsa_private_key_t(uj, &uj_private_key));
 
+  otcrypto_ecc_curve_type_t curve_type;
   otcrypto_unblinded_key_t public_key;
   size_t digest_len;
 
@@ -291,17 +291,17 @@ status_t handle_ecdsa(ujson_t *uj) {
   p384_point_t pub_p384;
   switch (uj_curve) {
     case kCryptotestEcdsaCurveP256:
-      success = set_nist_p256_params(uj_qx, uj_qy, uj_signature, &public_key,
-                                     &signature_p256, &pub_p256, &signature_mut,
-                                     &digest_len);
+      success = set_nist_p256_params(uj_qx, uj_qy, uj_signature, &curve_type,
+                                     &public_key, &signature_p256, &pub_p256,
+                                     &signature_mut, &digest_len);
       if (!success) {
         return INVALID_ARGUMENT();
       }
       break;
     case kCryptotestEcdsaCurveP384:
-      success = set_nist_p384_params(uj_qx, uj_qy, uj_signature, &public_key,
-                                     &signature_p384, &pub_p384, &signature_mut,
-                                     &digest_len);
+      success = set_nist_p384_params(uj_qx, uj_qy, uj_signature, &curve_type,
+                                     &public_key, &signature_p384, &pub_p384,
+                                     &signature_mut, &digest_len);
       if (!success) {
         return INVALID_ARGUMENT();
       }
@@ -316,6 +316,11 @@ status_t handle_ecdsa(ujson_t *uj) {
       .data = signature_mut.data,
   };
 
+  otcrypto_ecc_curve_t elliptic_curve = {
+      .curve_type = curve_type,
+      // NULL because we use a named curve
+      .domain_parameter = NULL,
+  };
   otcrypto_hash_mode_t mode;
   switch (uj_hash_alg) {
     case kCryptotestEcdsaHashAlgSha256:
@@ -353,12 +358,12 @@ status_t handle_ecdsa(ujson_t *uj) {
     case kCryptotestEcdsaOperationSign: {
       switch (uj_curve) {
         case kCryptotestEcdsaCurveP256: {
-          return p256_sign(uj, &uj_private_key, message_digest, signature_mut,
-                           &uj_signature);
+          return p256_sign(uj, &uj_private_key, elliptic_curve, message_digest,
+                           signature_mut, &uj_signature);
         }
         case kCryptotestEcdsaCurveP384: {
-          return p384_sign(uj, &uj_private_key, message_digest, signature_mut,
-                           &uj_signature);
+          return p384_sign(uj, &uj_private_key, elliptic_curve, message_digest,
+                           signature_mut, &uj_signature);
         }
         default:
           LOG_ERROR("Unsupported ECC curve: %d", uj_curve);
@@ -368,23 +373,11 @@ status_t handle_ecdsa(ujson_t *uj) {
     }
     case kCryptotestEcdsaOperationVerify: {
       hardened_bool_t verification_result = kHardenedBoolFalse;
-      otcrypto_status_t status;
-      switch (uj_curve) {
-        case kCryptotestEcdsaCurveP256: {
-          status = otcrypto_ecdsa_p256_verify(&public_key, message_digest,
-                                              signature, &verification_result);
-          break;
-        }
-        case kCryptotestEcdsaCurveP384: {
-          status = otcrypto_ecdsa_p384_verify(&public_key, message_digest,
-                                              signature, &verification_result);
-          break;
-        }
-        default:
-          LOG_ERROR("Unsupported ECC curve: %d", uj_curve);
-          return INVALID_ARGUMENT();
-      }
-      return interpret_verify_status(uj, status, &verification_result);
+      return interpret_verify_status(
+          uj,
+          otcrypto_ecdsa_verify(&public_key, message_digest, signature,
+                                &elliptic_curve, &verification_result),
+          &verification_result);
     }
     default:
       LOG_ERROR("Unrecognized ECDSA operation: %d", uj_op);

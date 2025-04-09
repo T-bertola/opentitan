@@ -6,31 +6,12 @@
 #define OPENTITAN_SW_DEVICE_SILICON_CREATOR_LIB_OWNERSHIP_OWNER_BLOCK_H_
 
 #include "sw/device/lib/base/hardened.h"
-#include "sw/device/silicon_creator/lib/boot_data.h"
 #include "sw/device/silicon_creator/lib/error.h"
 #include "sw/device/silicon_creator/lib/ownership/datatypes.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
-
-/**
- * The signature or sealing status of an owner page.
- */
-typedef enum owner_page_status {
-  /** Invalid: `INV_`. */
-  kOwnerPageStatusInvalid = 0x5f564e49,
-  /** Sealed: `SEAL`. */
-  kOwnerPageStatusSealed = 0x4c414553,
-  /** Signed: `SIGN`. */
-  kOwnerPageStatusSigned = 0x4e474953,
-} owner_page_status_t;
-
-/**
- * RAM copies of the owner pages read out of flash INFO pages.
- */
-extern owner_block_t owner_page[2];
-extern owner_page_status_t owner_page_valid[2];
 
 /**
  * The owner config struct contains high-level configuration items
@@ -59,21 +40,6 @@ typedef struct owner_application_keyring {
 } owner_application_keyring_t;
 
 /**
- * Determine if the ownership update mode is one of the "newversion" modes.
- *
- * @return kHardenedBoolTrue if it is a newversion mode.
- */
-hardened_bool_t owner_block_newversion_mode(void);
-
-/**
- * Check if owner page 1 is valid for ownership transfer.
- *
- * @param bootdata The current bootdata.
- * @return kHardenedBoolTrue if page 1 is valid.
- */
-hardened_bool_t owner_block_page1_valid_for_transfer(boot_data_t *bootdata);
-
-/**
  * Initialize the owner config with default values.
  *
  * The sram_exec mode is set to DisabledLocked and the three configuration
@@ -97,28 +63,16 @@ rom_error_t owner_block_parse(const owner_block_t *block,
                               owner_application_keyring_t *keyring);
 
 /**
- * Check the flash config for errors.
- *
- * Currently, this checks that a flash config region covering the ROM_EXT
- * is compatible with the default flash config region.
- *
- * @param flash A pointer to a flash configuration struct.
- * @return error code.
- */
-rom_error_t owner_block_flash_check(const owner_flash_config_t *flash);
-
-/**
  * Apply the flash configuration parameters from the owner block.
  *
  * @param flash A pointer to a flash configuration struct.
  * @param config_side Which side of the flash to configure.
- * @param lockdown Apply any special lockdown configuration to the specified
- *                 side of the flash.  May use kHardenedBoolFalse to skip
- *                 lockdown.
+ * @param primary_side Which side of the flash is primary.
  * @return error code.
  */
 rom_error_t owner_block_flash_apply(const owner_flash_config_t *flash,
-                                    uint32_t config_side, uint32_t lockdown);
+                                    uint32_t config_side,
+                                    uint32_t primary_side);
 
 /**
  * Apply the flash info configuration parameters from the owner block.
@@ -133,13 +87,6 @@ rom_error_t owner_keyring_find_key(const owner_application_keyring_t *keyring,
                                    size_t *index);
 
 /**
- * Determine whether the given key is on owner page 0 or page 1.
- *
- * @return page number.
- */
-size_t owner_block_key_page(const owner_application_key_t *key);
-
-/**
  * Determine whether a particular rescue command is allowed.
  *
  * @param rescue A pointer to the rescue configuration.
@@ -148,14 +95,6 @@ size_t owner_block_key_page(const owner_application_key_t *key);
  */
 hardened_bool_t owner_rescue_command_allowed(
     const owner_rescue_config_t *rescue, uint32_t command);
-
-/**
- * Measure the content of the owner page.
- *
- * @param page The owner page to measure.
- * @param measurement The measurement value.
- */
-void owner_block_measurement(size_t page, hmac_digest_t *mesaurment);
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus

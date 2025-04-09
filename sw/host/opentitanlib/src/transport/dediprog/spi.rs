@@ -266,7 +266,7 @@ impl DediprogSpi {
                     transactions = rest;
                     self.run_transaction(&mut [Transfer::Write(cmd.to_bytes()?)])?
                 }
-                [Read(cmd, rbuf), rest @ ..] => {
+                [Read(cmd, ref mut rbuf), rest @ ..] => {
                     transactions = rest;
                     self.eeprom_read_transaction(cmd, rbuf)?;
                 }

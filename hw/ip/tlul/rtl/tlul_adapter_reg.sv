@@ -151,7 +151,9 @@ module tlul_adapter_reg
 
   tlul_pkg::tl_d2h_t tl_o_pre;
   assign tl_o_pre = '{
-    a_ready:  ~(outstanding_q | busy_i),
+    // busy is selected based on address
+    // thus if there is no valid transaction, we should ignore busy
+    a_ready:  ~(outstanding_q | tl_i.a_valid & busy_i),
     d_valid:  outstanding_q,
     d_opcode: rspop_q,
     d_param:  '0,
@@ -166,8 +168,7 @@ module tlul_adapter_reg
   // outgoing integrity generation
   tlul_rsp_intg_gen #(
     .EnableRspIntgGen(EnableRspIntgGen),
-    .EnableDataIntgGen(EnableDataIntgGen),
-    .UserInIsZero(1'b1)
+    .EnableDataIntgGen(EnableDataIntgGen)
   ) u_rsp_intg_gen (
     .tl_i(tl_o_pre),
     .tl_o(tl_o)

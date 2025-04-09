@@ -44,15 +44,16 @@ module prim_xilinx_ram_1p import prim_ram_1p_pkg::*; #(
 
     logic unused_signals;
     assign unused_signals = ^{rst_ni, cfg_i};
-    assign cfg_rsp_o      = '0;
+    assign cfg_rsp_o.done = 1'b0;
 
     for (genvar k = 0; k < Width; k = k + PrimMaxWidth) begin : gen_split
       localparam int PrimWidth = ((Width - k) > PrimMaxWidth) ? PrimMaxWidth : Width - k;
+      localparam string PrimMemoryInitFile = (MemInitFile != "") ? MemInitFile : "none";
 
       xpm_memory_spram #(
         .ADDR_WIDTH_A(Aw),
         .BYTE_WRITE_WIDTH_A(PrimWidth), // Masks are not supported
-        .MEMORY_INIT_FILE((MemInitFile == "") ? "none" : MemInitFile),
+        .MEMORY_INIT_FILE(PrimMemoryInitFile),
         .MEMORY_SIZE(Depth * PrimWidth),
         .READ_DATA_WIDTH_A(PrimWidth),
         .READ_LATENCY_A(1),

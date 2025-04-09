@@ -6,12 +6,12 @@
 set -e
 
 # Escape the sandbox when running under `bazel test`. This script assumes that
-# when it's invoked by Bazel, the Bazel target will depend on `//:MODULE.bazel`.
+# when it's invoked by Bazel, the Bazel target will depend on `//:WORKSPACE.bzlmod`.
 # This assumption enables us to infer that we're running in the sandbox when we
-# see a symlink named "MODULE.bazel".
-if [[ -L MODULE.bazel ]]; then
+# see a symlink named "WORKSPACE.bzlmod".
+if [[ -L WORKSPACE.bzlmod ]]; then
     SHELLCHECK="$(realpath "${SHELLCHECK}")"
-    REPO_TOP="$(dirname "$(realpath MODULE.bazel)")"
+    REPO_TOP="$(dirname "$(realpath WORKSPACE.bzlmod)")"
     cd "${REPO_TOP}"
 else
     REPO_TOP="$(git rev-parse --show-toplevel)"

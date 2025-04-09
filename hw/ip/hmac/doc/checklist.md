@@ -98,17 +98,17 @@ Security      | [SEC_CM_COUNCIL_REVIEWED][]  | N/A         | This block only con
 
  Type         | Item                    | Resolution  | Note/Collaterals
 --------------|-------------------------|-------------|------------------
-Documentation | [NEW_FEATURES_D3][]     | Done        | Introduction of new fields in several CSRs (see #22852, #23242)
-RTL           | [TODO_COMPLETE][]       | Done        | (see #25519)
-Code Quality  | [LINT_COMPLETE][]       | Done        | (see #25519)
-Code Quality  | [CDC_COMPLETE][]        | N/A         |
-Code Quality  | [RDC_COMPLETE][]        | N/A         |
-Review        | [REVIEW_RTL][]          | Done        | (see #22638)
-Review        | [REVIEW_DELETED_FF][]   | Done        | (see #22638)
-Review        | [REVIEW_SW_CHANGE][]    | Done        | The new CSR fields from above have been reflected in the cryptolib driver (see #23510)
-Review        | [REVIEW_SW_ERRATA][]    | N/A         |
-Review        | Reviewer(s)             | Done        | andrea-caforio@ vogelpi@ rswarbrick@
-Review        | Signoff date            | Done        | 2025-02-21
+Documentation | [NEW_FEATURES_D3][]     | Not started |
+RTL           | [TODO_COMPLETE][]       | Not started |
+Code Quality  | [LINT_COMPLETE][]       | Not started |
+Code Quality  | [CDC_COMPLETE][]        | Not started |
+Code Quality  | [RDC_COMPLETE][]        | Not started |
+Review        | [REVIEW_RTL][]          | Not started |
+Review        | [REVIEW_DELETED_FF][]   | Not started |
+Review        | [REVIEW_SW_CHANGE][]    | Not started |
+Review        | [REVIEW_SW_ERRATA][]    | Not started |
+Review        | Reviewer(s)             | Not started |
+Review        | Signoff date            | Not started |
 
 [NEW_FEATURES_D3]:      ../../../../doc/project_governance/checklist/README.md#new_features_d3
 [TODO_COMPLETE]:        ../../../../doc/project_governance/checklist/README.md#todo_complete
@@ -240,21 +240,21 @@ Review        | [SEC_CM_DV_REVIEWED][]                  | Done        | Waived t
 
  Type         | Item                              | Resolution  | Note/Collaterals
 --------------|-----------------------------------|-------------|------------------
-Documentation | [DESIGN_DELTAS_CAPTURED_V3][]     | Done        |
-Tests         | [X_PROP_ANALYSIS_COMPLETED][]     | Done        | xprop.log file says: "instrumentation success rate:  100%"
-Tests         | [FPV_ASSERTIONS_PROVEN_AT_V3][]   | N/A         |
-Regression    | [SIM_NIGHTLY_REGRESSION_AT_V3][]  | Done        | Documented in issue #25215
-Coverage      | [SIM_CODE_COVERAGE_AT_100][]      | Done        | Documented in issue #25216
-Coverage      | [SIM_FUNCTIONAL_COVERAGE_AT_100][]| Done        | Documented in issue #25217
-Coverage      | [FPV_CODE_COVERAGE_AT_100][]      | N/A         |
-Coverage      | [FPV_COI_COVERAGE_AT_100][]       | N/A         |
-Code Quality  | [ALL_TODOS_RESOLVED][]            | Done        | Remaining TODOs have a linked issue and are not required for verification completion
-Code Quality  | [NO_TOOL_WARNINGS_THROWN][]       | Done        |
-Code Quality  | [TB_LINT_COMPLETE][]              | Done        | CI VeribleLint do not report any error/warning and no waiver file has been used
-Integration   | [PRE_VERIFIED_SUB_MODULES_V3][]   | N/A         |
-Issues        | [NO_ISSUES_PENDING][]             | Done        | Documented in issue #22671; none of the remaining open issues are required for verification completion
-Review        | Reviewer(s)                       | Done        | mvelay@ rswarbrick@
-Review        | Signoff date                      | 2025-04-03  |
+Documentation | [DESIGN_DELTAS_CAPTURED_V3][]     | Not started |
+Tests         | [X_PROP_ANALYSIS_COMPLETED][]     | Not started |
+Tests         | [FPV_ASSERTIONS_PROVEN_AT_V3][]   | Not started |
+Regression    | [SIM_NIGHTLY_REGRESSION_AT_V3][]  | Not started |
+Coverage      | [SIM_CODE_COVERAGE_AT_100][]      | Not started |
+Coverage      | [SIM_FUNCTIONAL_COVERAGE_AT_100][]| Not started |
+Coverage      | [FPV_CODE_COVERAGE_AT_100][]      | Not started |
+Coverage      | [FPV_COI_COVERAGE_AT_100][]       | Not started |
+Code Quality  | [ALL_TODOS_RESOLVED][]            | Not started |
+Code Quality  | [NO_TOOL_WARNINGS_THROWN][]       | Not started |
+Code Quality  | [TB_LINT_COMPLETE][]              | Not started |
+Integration   | [PRE_VERIFIED_SUB_MODULES_V3][]   | Not started |
+Issues        | [NO_ISSUES_PENDING][]             | Not started |
+Review        | Reviewer(s)                       | Not started |
+Review        | Signoff date                      | Not started |
 
 [DESIGN_DELTAS_CAPTURED_V3]:     ../../../../doc/project_governance/checklist/README.md#design_deltas_captured_v3
 [X_PROP_ANALYSIS_COMPLETED]:     ../../../../doc/project_governance/checklist/README.md#x_prop_analysis_completed

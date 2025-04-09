@@ -7,11 +7,12 @@
 package pwrmgr_reg_pkg;
 
   // Param list
-  parameter int NumWkups = 4;
+  parameter int NumWkups = 5;
   parameter int PINMUX_AON_PIN_WKUP_REQ_IDX = 0;
   parameter int AON_TIMER_AON_WKUP_REQ_IDX = 1;
-  parameter int SOC_PROXY_WKUP_INTERNAL_REQ_IDX = 2;
-  parameter int SOC_PROXY_WKUP_EXTERNAL_REQ_IDX = 3;
+  parameter int SENSOR_CTRL_WKUP_REQ_IDX = 2;
+  parameter int SOC_PROXY_WKUP_INTERNAL_REQ_IDX = 3;
+  parameter int SOC_PROXY_WKUP_EXTERNAL_REQ_IDX = 4;
   parameter int NumRstReqs = 2;
   parameter int NumIntRstReqs = 2;
   parameter int NumDebugRstReqs = 1;
@@ -23,9 +24,6 @@ package pwrmgr_reg_pkg;
 
   // Address widths within the block
   parameter int BlockAw = 7;
-
-  // Number of registers for every interface
-  parameter int NumRegs = 17;
 
   ////////////////////////////
   // Typedefs for registers //
@@ -53,6 +51,12 @@ package pwrmgr_reg_pkg;
     struct packed {
       logic        q;
     } main_pd_n;
+    struct packed {
+      logic        q;
+    } usb_clk_en_active;
+    struct packed {
+      logic        q;
+    } usb_clk_en_lp;
     struct packed {
       logic        q;
     } io_clk_en;
@@ -91,7 +95,7 @@ package pwrmgr_reg_pkg;
       logic        qe;
     } fall_through;
     struct packed {
-      logic [3:0]  q;
+      logic [4:0]  q;
       logic        qe;
     } reasons;
   } pwrmgr_reg2hw_wake_info_reg_t;
@@ -146,7 +150,7 @@ package pwrmgr_reg_pkg;
 
   typedef struct packed {
     struct packed {
-      logic [3:0]  d;
+      logic [4:0]  d;
     } reasons;
     struct packed {
       logic        d;
@@ -173,29 +177,29 @@ package pwrmgr_reg_pkg;
 
   // Register -> HW type
   typedef struct packed {
-    pwrmgr_reg2hw_intr_state_reg_t intr_state; // [30:30]
-    pwrmgr_reg2hw_intr_enable_reg_t intr_enable; // [29:29]
-    pwrmgr_reg2hw_intr_test_reg_t intr_test; // [28:27]
-    pwrmgr_reg2hw_alert_test_reg_t alert_test; // [26:25]
-    pwrmgr_reg2hw_control_reg_t control; // [24:21]
-    pwrmgr_reg2hw_cfg_cdc_sync_reg_t cfg_cdc_sync; // [20:19]
-    pwrmgr_reg2hw_wakeup_en_mreg_t [3:0] wakeup_en; // [18:15]
-    pwrmgr_reg2hw_reset_en_mreg_t [1:0] reset_en; // [14:13]
-    pwrmgr_reg2hw_wake_info_capture_dis_reg_t wake_info_capture_dis; // [12:12]
-    pwrmgr_reg2hw_wake_info_reg_t wake_info; // [11:3]
+    pwrmgr_reg2hw_intr_state_reg_t intr_state; // [34:34]
+    pwrmgr_reg2hw_intr_enable_reg_t intr_enable; // [33:33]
+    pwrmgr_reg2hw_intr_test_reg_t intr_test; // [32:31]
+    pwrmgr_reg2hw_alert_test_reg_t alert_test; // [30:29]
+    pwrmgr_reg2hw_control_reg_t control; // [28:23]
+    pwrmgr_reg2hw_cfg_cdc_sync_reg_t cfg_cdc_sync; // [22:21]
+    pwrmgr_reg2hw_wakeup_en_mreg_t [4:0] wakeup_en; // [20:16]
+    pwrmgr_reg2hw_reset_en_mreg_t [1:0] reset_en; // [15:14]
+    pwrmgr_reg2hw_wake_info_capture_dis_reg_t wake_info_capture_dis; // [13:13]
+    pwrmgr_reg2hw_wake_info_reg_t wake_info; // [12:3]
     pwrmgr_reg2hw_fault_status_reg_t fault_status; // [2:0]
   } pwrmgr_reg2hw_t;
 
   // HW -> register type
   typedef struct packed {
-    pwrmgr_hw2reg_intr_state_reg_t intr_state; // [32:31]
-    pwrmgr_hw2reg_ctrl_cfg_regwen_reg_t ctrl_cfg_regwen; // [30:30]
-    pwrmgr_hw2reg_control_reg_t control; // [29:28]
-    pwrmgr_hw2reg_cfg_cdc_sync_reg_t cfg_cdc_sync; // [27:26]
-    pwrmgr_hw2reg_wake_status_mreg_t [3:0] wake_status; // [25:18]
-    pwrmgr_hw2reg_reset_status_mreg_t [1:0] reset_status; // [17:14]
-    pwrmgr_hw2reg_escalate_reset_status_reg_t escalate_reset_status; // [13:12]
-    pwrmgr_hw2reg_wake_info_reg_t wake_info; // [11:6]
+    pwrmgr_hw2reg_intr_state_reg_t intr_state; // [35:34]
+    pwrmgr_hw2reg_ctrl_cfg_regwen_reg_t ctrl_cfg_regwen; // [33:33]
+    pwrmgr_hw2reg_control_reg_t control; // [32:31]
+    pwrmgr_hw2reg_cfg_cdc_sync_reg_t cfg_cdc_sync; // [30:29]
+    pwrmgr_hw2reg_wake_status_mreg_t [4:0] wake_status; // [28:19]
+    pwrmgr_hw2reg_reset_status_mreg_t [1:0] reset_status; // [18:15]
+    pwrmgr_hw2reg_escalate_reset_status_reg_t escalate_reset_status; // [14:13]
+    pwrmgr_hw2reg_wake_info_reg_t wake_info; // [12:6]
     pwrmgr_hw2reg_fault_status_reg_t fault_status; // [5:0]
   } pwrmgr_hw2reg_t;
 
@@ -225,8 +229,8 @@ package pwrmgr_reg_pkg;
   parameter logic [0:0] PWRMGR_ALERT_TEST_FATAL_FAULT_RESVAL = 1'h 0;
   parameter logic [0:0] PWRMGR_CTRL_CFG_REGWEN_RESVAL = 1'h 1;
   parameter logic [0:0] PWRMGR_CTRL_CFG_REGWEN_EN_RESVAL = 1'h 1;
-  parameter logic [5:0] PWRMGR_WAKE_INFO_RESVAL = 6'h 0;
-  parameter logic [3:0] PWRMGR_WAKE_INFO_REASONS_RESVAL = 4'h 0;
+  parameter logic [6:0] PWRMGR_WAKE_INFO_RESVAL = 7'h 0;
+  parameter logic [4:0] PWRMGR_WAKE_INFO_REASONS_RESVAL = 5'h 0;
   parameter logic [0:0] PWRMGR_WAKE_INFO_FALL_THROUGH_RESVAL = 1'h 0;
   parameter logic [0:0] PWRMGR_WAKE_INFO_ABORT_RESVAL = 1'h 0;
 
@@ -258,7 +262,7 @@ package pwrmgr_reg_pkg;
     4'b 0001, // index[ 2] PWRMGR_INTR_TEST
     4'b 0001, // index[ 3] PWRMGR_ALERT_TEST
     4'b 0001, // index[ 4] PWRMGR_CTRL_CFG_REGWEN
-    4'b 0001, // index[ 5] PWRMGR_CONTROL
+    4'b 0011, // index[ 5] PWRMGR_CONTROL
     4'b 0001, // index[ 6] PWRMGR_CFG_CDC_SYNC
     4'b 0001, // index[ 7] PWRMGR_WAKEUP_EN_REGWEN
     4'b 0001, // index[ 8] PWRMGR_WAKEUP_EN

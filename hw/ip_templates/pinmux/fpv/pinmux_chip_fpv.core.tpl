@@ -4,20 +4,19 @@ CAPI=2:
 # SPDX-License-Identifier: Apache-2.0
 name: ${instance_vlnv("lowrisc:systems:pinmux_chip_fpv:0.1")}
 description: "pinmux FPV target with chip_earlgrey parameters"
+virtual:
+  - lowrisc:ip_interfaces:pinmux_chip_fpv
 
 filesets:
   files_formal:
     depend:
       - lowrisc:prim:all
       - lowrisc:ip:tlul
-      - lowrisc:ip:jtag_pkg
-      - lowrisc:prim:mubi_pkg
-      - lowrisc:ip:lc_ctrl_pkg
-      - ${instance_vlnv("lowrisc:ip:pinmux:0.1")}
+      - lowrisc:ip_interfaces:pinmux
       - lowrisc:fpv:csr_assert_gen
-      - ${instance_vlnv("lowrisc:fpv:pinmux_common_fpv:0.1")}
-      - ${instance_vlnv("lowrisc:constants:top_pkg")}
-      - ${instance_vlnv("lowrisc:systems:scan_role_pkg")}
+      - lowrisc:fpv:pinmux_common_fpv
+      - lowrisc:systems:top_${topname}_pkg
+      - lowrisc:systems:scan_role_pkg
     files:
       - tb/pinmux_chip_tb.sv
     file_type: systemVerilogSource

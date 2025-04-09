@@ -53,7 +53,6 @@ obj_transform = rv_rule(
         "format": attr.string(default = "binary"),
         "_cc_toolchain": attr.label(default = Label("@bazel_tools//tools/cpp:current_cc_toolchain")),
     },
-    fragments = ["cpp"],
     toolchains = ["@rules_cc//cc:toolchain_type"],
 )
 
@@ -98,15 +97,15 @@ scramble_flash_vmem = rv_rule(
         "otp": attr.label(allow_single_file = True),
         "otp_mmap": attr.label(
             allow_single_file = True,
-            default = "//hw/top_earlgrey/data/otp:otp_ctrl_mmap.hjson",
+            default = "//hw/ip/otp_ctrl/data:otp_ctrl_mmap.hjson",
             doc = "OTP memory map configuration HJSON file.",
         ),
         "otp_seed": attr.label(
-            default = "//util/design/data:otp_seed",
+            default = "//hw/ip/otp_ctrl/data:otp_seed",
             doc = "Configuration override seed used to randomize OTP netlist constants.",
         ),
         "otp_data_perm": attr.label(
-            default = "//util/design/data:data_perm",
+            default = "//hw/ip/otp_ctrl/data:data_perm",
             doc = "Option to indicate OTP VMEM file bit layout.",
         ),
         "_tool": attr.label(

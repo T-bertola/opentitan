@@ -28,18 +28,13 @@
                   import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
                   rel_path: "hw/ip/mbx/lint/{tool}"
              },
-             {    name: ac_range_check
-                  fusesoc_core: lowrisc:dv:ac_range_check_sim
-                  import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
-                  rel_path: "hw/top_darjeeling/ip_autogen/ac_range_check/dv/lint/{tool}"
-             },
              {    name: aes
                   fusesoc_core: lowrisc:dv:aes_sim
                   import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
                   rel_path: "hw/ip/aes/dv/lint/{tool}"
              },
           //    {    name: alert_handler
-          //         fusesoc_core: lowrisc:darjeeling_dv:alert_handler_sim
+          //         fusesoc_core: lowrisc:opentitan:top_darjeeling_alert_handler_sim
           //         import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
           //         rel_path: "hw/top_darjeeling/ip_autogen/alert_handler/dv/lint/{tool}"
           //    },
@@ -73,10 +68,15 @@
                   import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
                   rel_path: "hw/ip/edn/dv/lint/{tool}"
              },
+          //    {    name: flash_ctrl
+          //         fusesoc_core: lowrisc:dv:flash_ctrl_sim
+          //         import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
+          //         rel_path: "hw/top_darjeeling/ip_autogen/flash_ctrl/dv/lint/{tool}"
+          //    },
              {    name: gpio
-                  fusesoc_core: lowrisc:darjeeling_dv:gpio_sim
+                  fusesoc_core: lowrisc:dv:gpio_sim
                   import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
-                  rel_path: "hw/top_darjeeling/ip_autogen/gpio/dv/lint/{tool}"
+                  rel_path: "hw/ip/gpio/dv/lint/{tool}"
              },
              {    name: hmac
                   fusesoc_core: lowrisc:dv:hmac_sim
@@ -111,9 +111,9 @@
                   rel_path: "hw/ip/lc_ctrl/dv/lint/{tool}"
              },
              {    name: otp_ctrl
-                  fusesoc_core: lowrisc:darjeeling_dv:otp_ctrl_sim
+                  fusesoc_core: lowrisc:dv:otp_ctrl_sim
                   import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
-                  rel_path: "hw/top_darjeeling/ip_autogen/otp_ctrl/dv/lint/{tool}"
+                  rel_path: "hw/ip/otp_ctrl/dv/lint/{tool}"
              },
              {    name: pattgen
                   fusesoc_core: lowrisc:,dv:pattgen_sim,
@@ -170,11 +170,6 @@
                   import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
                   rel_path: "hw/ip/rv_timer/dv/lint/{tool}"
              },
-             {    name: soc_dbg_ctrl
-                  fusesoc_core: lowrisc:dv:soc_dbg_ctrl_sim
-                  import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
-                  rel_path: "hw/ip/soc_dbg_ctrl/dv/lint/{tool}"
-             },
              {    name: spi_device
                   fusesoc_core: lowrisc:dv:spi_device_sim
                   import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
@@ -211,7 +206,7 @@
           //         rel_path: "hw/top_darjeeling/ip/xbar_mbx/dv/lint/{tool}"
           //    },
           //    {    name: chip
-          //         fusesoc_core: lowrisc:dv:top_darjeeling_chip_sim
+          //         fusesoc_core: lowrisc:dv:chip_sim
           //         import_cfgs: ["{proj_root}/hw/lint/tools/dvsim/common_lint_cfg.hjson"]
           //         rel_path: "hw/top_darjeeling/dv/lint/{tool}"
           //         overrides: [

@@ -26,6 +26,8 @@ parameter string LIST_OF_ALERTS[] = {
   "clkmgr_aon_fatal_fault",
   "pinmux_aon_fatal_fault",
   "aon_timer_aon_fatal_fault",
+  "sensor_ctrl_recov_alert",
+  "sensor_ctrl_fatal_alert",
   "soc_proxy_fatal_alert_intg",
   "soc_proxy_fatal_alert_external_0",
   "soc_proxy_fatal_alert_external_1",
@@ -100,14 +102,10 @@ parameter string LIST_OF_ALERTS[] = {
   "mbx_pcie1_recov_fault",
   "soc_dbg_ctrl_fatal_fault",
   "soc_dbg_ctrl_recov_ctrl_update_err",
-  "racl_ctrl_fatal_fault",
-  "racl_ctrl_recov_ctrl_update_err",
-  "ac_range_check_recov_ctrl_update_err",
-  "ac_range_check_fatal_fault",
   "rv_core_ibex_fatal_sw_err",
   "rv_core_ibex_recov_sw_err",
   "rv_core_ibex_fatal_hw_err",
   "rv_core_ibex_recov_hw_err"
 };
 
-parameter uint NUM_ALERTS = 103;
+parameter uint NUM_ALERTS = 101;

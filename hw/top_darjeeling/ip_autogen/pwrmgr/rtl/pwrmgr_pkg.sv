@@ -33,12 +33,14 @@ package pwrmgr_pkg;
     logic slow_clk_en;
     logic core_clk_en;
     logic io_clk_en;
+    logic usb_clk_en;
   } pwr_ast_req_t;
 
   typedef struct packed {
     logic slow_clk_val;
     logic core_clk_val;
     logic io_clk_val;
+    logic usb_clk_val;
     logic main_pok;
   } pwr_ast_rsp_t;
 
@@ -47,6 +49,7 @@ package pwrmgr_pkg;
     slow_clk_val: 1'b1,
     core_clk_val: 1'b1,
     io_clk_val: 1'b1,
+    usb_clk_val: 1'b1,
     main_pok: 1'b1
   };
 
@@ -54,6 +57,7 @@ package pwrmgr_pkg;
     slow_clk_val: 1'b0,
     core_clk_val: 1'b0,
     io_clk_val: 1'b0,
+    usb_clk_val: 1'b0,
     main_pok: 1'b0
   };
 
@@ -89,12 +93,14 @@ package pwrmgr_pkg;
   typedef struct packed {
     logic main_ip_clk_en;
     logic io_ip_clk_en;
+    logic usb_ip_clk_en;
   } pwr_clk_req_t;
 
   // clkmgr to pwrmgr
   typedef struct packed {
     logic main_status;
     logic io_status;
+    logic usb_status;
   } pwr_clk_rsp_t;
 
   // pwrmgr to otp
@@ -112,6 +118,23 @@ package pwrmgr_pkg;
   parameter pwr_otp_rsp_t PWR_OTP_RSP_DEFAULT = '{
     otp_done: 1'b1,
     otp_idle: 1'b1
+  };
+
+  // pwrmgr to lifecycle
+  typedef struct packed {
+    logic lc_init;
+  } pwr_lc_req_t;
+
+  // lifecycle to pwrmgr
+  typedef struct packed {
+    logic lc_done;
+    logic lc_idle;
+  } pwr_lc_rsp_t;
+
+  // default value (for dangling ports)
+  parameter pwr_lc_rsp_t PWR_LC_RSP_DEFAULT = '{
+    lc_done: 1'b1,
+    lc_idle: 1'b1
   };
 
   typedef struct packed {

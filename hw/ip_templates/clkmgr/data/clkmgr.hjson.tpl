@@ -422,7 +422,6 @@
       ''',
       swaccess: "rw",
       hwaccess: "hro",
-      regwen: "JITTER_REGWEN"
       fields: [
         {
           mubi: true,
@@ -602,7 +601,7 @@
           bits: "${min_msb}:${max_msb+1}",
           name: "LO",
           desc: "Min threshold for ${src} measurement",
-          resval: "${max(ratio - 10, 0)}"
+          resval: "${ratio - 10}"
         },
       ]
     },

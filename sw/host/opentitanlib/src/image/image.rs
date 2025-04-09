@@ -13,7 +13,6 @@ use std::io::{Read, Write};
 use std::mem::{align_of, size_of};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use zerocopy::FromBytes;
 
 use crate::crypto::ecdsa::{EcdsaPublicKey, EcdsaRawPublicKey, EcdsaRawSignature};
 use crate::crypto::rsa::Modulus;
@@ -404,24 +403,13 @@ impl Image {
 
         // TODO(moidx): Remove check once we have migrated away from RSA keys
         // and start using a key type field in the manifest.
-        //
-        // Note(cfrantz): I have disabled this error return because we want to test
-        // manifests with bad version numbers.  I've replaced the error return with
-        // a log message.  As stated by moidx@, we'll remove this once we've
-        // completely migrated away from RSA keys.
-        // ensure!(
-        //     manifest.manifest_version.major == CHIP_MANIFEST_VERSION_MAJOR2,
-        //     ImageError::InvalidManifestVersionforEcdsa(
-        //         manifest.manifest_version.major,
-        //         CHIP_MANIFEST_VERSION_MAJOR2
-        //     )
-        // );
-        if manifest.manifest_version.major != CHIP_MANIFEST_VERSION_MAJOR2 {
-            log::error!(
-                "Invalid manifest version for ECDSA: {:?}",
-                manifest.manifest_version
-            );
-        }
+        ensure!(
+            manifest.manifest_version.major == CHIP_MANIFEST_VERSION_MAJOR2,
+            ImageError::InvalidManifestVersionforEcdsa(
+                manifest.manifest_version.major,
+                CHIP_MANIFEST_VERSION_MAJOR2
+            )
+        );
 
         let mut manifest_def: ManifestSpec = (&*manifest).try_into()?;
 
@@ -483,9 +471,8 @@ impl Image {
         // key type.
         // TODO(moidx): Replace this with a key type field in the manifest once
         // support for RSA keys is removed.
-        if manifest.manifest_version.major == CHIP_MANIFEST_VERSION_MAJOR1 {
-            manifest.manifest_version.major = CHIP_MANIFEST_VERSION_MAJOR2;
-        }
+        manifest.manifest_version.major = CHIP_MANIFEST_VERSION_MAJOR2;
+        manifest.manifest_version.minor = CHIP_MANIFEST_VERSION_MINOR1;
         Ok(())
     }
 
@@ -494,7 +481,8 @@ impl Image {
         let mut offset = 0;
         while offset < self.size {
             let m = &self.data.bytes[offset..offset + size_of::<Manifest>()];
-            let manifest = Manifest::ref_from_bytes(m).map_err(|_| ImageError::Parse)?;
+            let manifest: zerocopy::Ref<_, Manifest> =
+                zerocopy::Ref::new(m).ok_or(ImageError::Parse)?;
             let kind = ManifestKind(manifest.identifier);
             let mut size = 1;
             if kind.is_known_value() {
@@ -502,7 +490,7 @@ impl Image {
                 result.push(SubImage {
                     kind,
                     offset,
-                    manifest,
+                    manifest: manifest.into_ref(),
                     data: &self.data.bytes[offset..offset + size],
                 });
             }
@@ -518,13 +506,17 @@ impl Image {
 
     pub fn borrow_manifest(&self) -> Result<&Manifest> {
         let manifest_slice = &self.data.bytes[0..size_of::<Manifest>()];
-        let manifest = Manifest::ref_from_bytes(manifest_slice).map_err(|_| ImageError::Parse)?;
+        let manifest_layout: zerocopy::Ref<_, Manifest> =
+            zerocopy::Ref::new(manifest_slice).ok_or(ImageError::Parse)?;
+        let manifest: &Manifest = manifest_layout.into_ref();
         Ok(manifest)
     }
 
     pub fn borrow_manifest_mut(&mut self) -> Result<&mut Manifest> {
         let manifest_slice = &mut self.data.bytes[0..size_of::<Manifest>()];
-        let manifest = Manifest::mut_from_bytes(manifest_slice).map_err(|_| ImageError::Parse)?;
+        let manifest_layout: zerocopy::Ref<_, Manifest> =
+            zerocopy::Ref::new(manifest_slice).ok_or(ImageError::Parse)?;
+        let manifest: &mut Manifest = manifest_layout.into_mut();
         Ok(manifest)
     }
 
@@ -578,22 +570,6 @@ impl Image {
     {
         Ok(f(&self.data.bytes[offset_of!(Manifest, usage_constraints)
             ..self.borrow_manifest()?.signed_region_end as usize]))
-    }
-
-    /// Compute the SHA256 digest for the signed portion of the `Image`.
-    pub fn compute_digest(&self) -> Result<sha256::Sha256Digest> {
-        self.map_signed_region(|v| sha256::sha256(v))
-    }
-}
-
-impl SubImage<'_> {
-    /// Operates on the signed region of the image.
-    pub fn map_signed_region<F, R>(&self, f: F) -> Result<R>
-    where
-        F: FnOnce(&[u8]) -> R,
-    {
-        Ok(f(&self.data[offset_of!(Manifest, usage_constraints)
-            ..self.manifest.signed_region_end as usize]))
     }
 
     /// Compute the SHA256 digest for the signed portion of the `Image`.
@@ -675,15 +651,15 @@ impl ImageAssembler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::testdata;
+    use crate::testdata;
 
     #[test]
     fn test_assemble_concat() -> Result<()> {
         // Test image assembly by concatenation.
         let mut image = ImageAssembler::with_params(16, false);
         image.parse(&[
-            testdata("image/hello.txt").to_str().unwrap(),
-            testdata("image/world.txt").to_str().unwrap(),
+            testdata!("hello.txt").to_str().unwrap(),
+            testdata!("world.txt").to_str().unwrap(),
         ])?;
         let data = image.assemble()?;
         assert_eq!(data, b"HelloWorld\xff\xff\xff\xff\xff\xff");
@@ -695,8 +671,8 @@ mod tests {
         // Test image assembly by explicit offsets.
         let mut image = ImageAssembler::with_params(16, false);
         image.parse(&[
-            testdata("image/hello.txt@0").to_str().unwrap(),
-            testdata("image/world.txt@0x8").to_str().unwrap(),
+            testdata!("hello.txt@0").to_str().unwrap(),
+            testdata!("world.txt@0x8").to_str().unwrap(),
         ])?;
         let data = image.assemble()?;
         assert_eq!(data, b"Hello\xff\xff\xffWorld\xff\xff\xff");
@@ -708,8 +684,8 @@ mod tests {
         // Test image assembly with mirroring.
         let mut image = ImageAssembler::with_params(20, true);
         image.parse(&[
-            testdata("image/hello.txt").to_str().unwrap(),
-            testdata("image/world.txt").to_str().unwrap(),
+            testdata!("hello.txt").to_str().unwrap(),
+            testdata!("world.txt").to_str().unwrap(),
         ])?;
         let data = image.assemble()?;
         assert_eq!(data, b"HelloWorldHelloWorld");
@@ -721,8 +697,8 @@ mod tests {
         // Test image assembly where one of the source files isn't read completely.
         let mut image = ImageAssembler::with_params(16, true);
         image.parse(&[
-            testdata("image/hello.txt@0").to_str().unwrap(),
-            testdata("image/world.txt@0x5").to_str().unwrap(),
+            testdata!("hello.txt@0").to_str().unwrap(),
+            testdata!("world.txt@0x5").to_str().unwrap(),
         ])?;
         let err = image.assemble().unwrap_err();
         assert_eq!(
@@ -735,18 +711,18 @@ mod tests {
     #[test]
     fn test_load_image() {
         // Read and write back image.
-        let image = Image::read_from_file(&testdata("image/test_image.bin")).unwrap();
+        let image = Image::read_from_file(&testdata!("test_image.bin")).unwrap();
         image
-            .write_to_file(&testdata("image/test_image_out.bin"))
+            .write_to_file(&testdata!("test_image_out.bin"))
             .unwrap();
 
         // Ensure the result is identical to the original.
         let (mut orig_bytes, mut res_bytes) = (Vec::<u8>::new(), Vec::<u8>::new());
-        File::open(testdata("image/test_image.bin"))
+        File::open(testdata!("test_image.bin"))
             .unwrap()
             .read_to_end(&mut orig_bytes)
             .unwrap();
-        File::open(testdata("image/test_image_out.bin"))
+        File::open(testdata!("test_image_out.bin"))
             .unwrap()
             .read_to_end(&mut res_bytes)
             .unwrap();

@@ -69,13 +69,16 @@ impl SpxInterface for SpxEf {
         let mut result = Vec::new();
         for file in ElementaryFile::list(&self.session)? {
             if let Some(app) = file.application {
-                if let Some((Self::APPLICATION, algo)) = app.split_once(':') {
-                    result.push(KeyEntry {
-                        alias: file.name.clone(),
-                        hash: None,
-                        algorithm: algo.into(),
-                        ..Default::default()
-                    });
+                match app.split_once(':') {
+                    Some((Self::APPLICATION, algo)) => {
+                        result.push(KeyEntry {
+                            alias: file.name.clone(),
+                            hash: None,
+                            algorithm: algo.into(),
+                            ..Default::default()
+                        });
+                    }
+                    Some((_, _)) | None => {}
                 }
             }
         }

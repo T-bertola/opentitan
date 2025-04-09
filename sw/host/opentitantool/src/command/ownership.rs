@@ -13,7 +13,7 @@ use opentitanlib::app::command::CommandDispatch;
 use opentitanlib::app::TransportWrapper;
 use opentitanlib::chip::helper::{OwnershipActivateParams, OwnershipUnlockParams};
 use opentitanlib::crypto::ecdsa::{EcdsaPrivateKey, EcdsaRawSignature};
-use opentitanlib::ownership::{GlobalFlags, OwnerBlock, TlvHeader};
+use opentitanlib::ownership::{OwnerBlock, TlvHeader};
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq)]
 enum Format {
@@ -24,8 +24,6 @@ enum Format {
 
 #[derive(Debug, Args)]
 pub struct OwnershipConfigCommand {
-    #[arg(long, help = "Show header and reserved fields")]
-    debug: bool,
     #[arg(long, help = "Use the basic ownership block", conflicts_with = "input")]
     basic: bool,
     #[arg(
@@ -52,7 +50,6 @@ impl CommandDispatch for OwnershipConfigCommand {
         _context: &dyn Any,
         _transport: &TransportWrapper,
     ) -> Result<Option<Box<dyn Annotate>>> {
-        GlobalFlags::set_debug(self.debug);
         let mut config = if self.basic {
             OwnerBlock::basic()
         } else {
@@ -88,11 +85,7 @@ impl CommandDispatch for OwnershipConfigCommand {
         }
 
         if let Some(output) = &self.output {
-            let mut f = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(output)?;
+            let mut f = OpenOptions::new().write(true).create(true).open(output)?;
             config.write(&mut f)?;
             Ok(None)
         } else {
@@ -158,11 +151,7 @@ impl CommandDispatch for OwnershipActivateCommand {
             .params
             .apply_to(self.input.as_ref().map(File::open).transpose()?.as_mut())?;
         if let Some(output) = &self.output {
-            let mut f = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(output)?;
+            let mut f = OpenOptions::new().write(true).create(true).open(output)?;
             activate.write(&mut f)?;
         }
         Ok(Some(Box::new(activate)))

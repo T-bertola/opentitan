@@ -104,7 +104,7 @@ class chip_sw_keymgr_key_derivation_vseq extends chip_sw_base_vseq;
     super.dut_init(reset_kind);
     void'($value$plusargs("lc_at_prod=%0d", lc_at_prod));
     if (lc_at_prod) begin
-      otp_write_lc_partition_state(cfg.mem_bkdr_util_h[Otp], LcStProd);
+      cfg.mem_bkdr_util_h[Otp].otp_write_lc_partition_state(LcStProd);
     end
   endtask
 
