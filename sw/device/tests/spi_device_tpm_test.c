@@ -29,6 +29,25 @@
 #include "hw/top_earlgrey/sw/autogen/top_earlgrey.h"
 #include "sw/device/lib/testing/autogen/isr_testutils.h"
 
+#define DEBUG_PRINT_SPI_BUF(total_buf, bytes_received)                   \
+    do {                                                                 \
+        for (int i = 0; i < (bytes_received); i += 16) {                \
+            char debug_str[128];                                        \
+            int len = 0;                                                \
+            len += snprintf(debug_str + len, sizeof(debug_str) - len,  \
+                           "TPM COMMAND[%d]:", i); \
+            for (int j = 0; j < 16 && (i + j) < (bytes_received); j++) {\
+                len += snprintf(debug_str + len, sizeof(debug_str) - len, \
+                               " %02x", (total_buf)[i + j]);            \
+            }                                                           \
+            LOG_INFO("%s", debug_str);                                  \
+        }                                                               \
+        LOG_INFO("LAST BYTE: %02x No. of Bytes %d",                     \
+                 (total_buf)[(bytes_received)], (bytes_received));      \
+    } while (0)
+
+
+
 #define DEBUG_PRINTS
 
 #define ENABLE_OSSL
@@ -426,6 +445,7 @@ LIB_EXPORT void ExecuteCommand(
         // return an error.
         //#ifdef ENABLE_OSSL
         result = CheckAuthNoSession(&command);
+        LOG_INFO("NOT STUCK");
 
         if(result != TPM_RC_SUCCESS){
             LOG_INFO("DEBUG INFO: CheckAuthSession Result = %d", result);
@@ -598,7 +618,7 @@ bool test_main(void) {
   // Wait for write interrupt.
   _TPM_Init();
 
-  gp.lockOutAuthEnabled = TRUE;
+  gp.lockOutAuthEnabled = FALSE;
   while(1){
     LOG_INFO("SYNC: Begin TPM Test");
   ATOMIC_WAIT_FOR_INTERRUPT(header_interrupt_received);
@@ -625,9 +645,9 @@ bool test_main(void) {
         goto End;
     }
   uint8_t buf[64] = {0};
-  uint8_t total_buf[256] = {0};
+  uint8_t total_buf[512] = {0};
   dif_result_t status = kDifOutOfRange;
-  uint8_t bytes_received = 0;
+  uint32_t bytes_received = 0;
   #ifdef NO_VERILATOR
   LOG_INFO("status for kDIFOutofRange: %d", status);
   LOG_INFO("Spi->dev.base_addr: %08x", spi_device.dev.base_addr);
@@ -636,7 +656,9 @@ bool test_main(void) {
     //LOG_INFO("Attempt read : %d", mmio_region_read32(spi_device.dev.base_addr,(SPI_DEVICE_INGRESS_BUFFER_REG_OFFSET)));
     //mmio_region_memcpy_from_mmio32(spi_device.dev.base_addr, 0x3E0, buf, num_bytes);
     status = dif_spi_device_tpm_read_data(&spi_device, num_bytes, buf);
-    uint32_t size = buf[5];
+    uint32_t size = (buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5];
+    //DEBUG_PRINT_SPI_BUF(buf,num_bytes );
+    LOG_INFO("Size: %d", size);
     memcpy(total_buf, buf, num_bytes);
     size = size - num_bytes;
     //LOG_INFO("TOTAL SIZE: %d NUM_BYTES: %d", size, num_bytes);
@@ -660,31 +682,34 @@ bool test_main(void) {
         status = dif_spi_device_tpm_read_data(&spi_device, num_bytes, buf);
         // for (int i = 0; i < num_bytes; i++){
         // LOG_INFO("DEBUG INFO: Read this info from the SPI Buf[%d]: %02x ",i, buf[i]);
-        // }       
+        // }  
+        //DEBUG_PRINT_SPI_BUF(buf, num_bytes);
+
         memcpy(&total_buf[bytes_received], buf, num_bytes);
         bytes_received = bytes_received + num_bytes;
         size = size - num_bytes;
         //LOG_INFO("SIZE: %d, NUM_BYTES: %d", size, num_bytes);
 
     }
-    //#define DEBUG_PRINT
+    #define DEBUG_PRINT
     #ifdef DEBUG_PRINT
-    // for (int i = 0; i < bytes_received; i++){
-    //  LOG_INFO("DEBUG INFO: Read this info from the SPI Buf[%d]: %02x ",i, total_buf[i]);
-    // }
-    for (int i = 0; i < bytes_received; i += 16) {
-    char debug_str[128]; // Buffer for the formatted string
-    int len = 0;
+    DEBUG_PRINT_SPI_BUF(total_buf, bytes_received);
+//     // for (int i = 0; i < bytes_received; i++){
+//     //  LOG_INFO("DEBUG INFO: Read this info from the SPI Buf[%d]: %02x ",i, total_buf[i]);
+//     // }
+//     for (int i = 0; i < bytes_received; i += 16) {
+//     char debug_str[128]; // Buffer for the formatted string
+//     int len = 0;
     
-    len += snprintf(debug_str + len, sizeof(debug_str) - len, "DEBUG INFO: Read this info from the SPI Buf[%d]:", i);
+//     len += snprintf(debug_str + len, sizeof(debug_str) - len, "DEBUG INFO: Read this info from the SPI Buf[%d]:", i);
     
-    for (int j = 0; j < 16 && (i + j) < bytes_received; j++) {
-        len += snprintf(debug_str + len, sizeof(debug_str) - len, " %02x", total_buf[i + j]);
-    }
+//     for (int j = 0; j < 16 && (i + j) < bytes_received; j++) {
+//         len += snprintf(debug_str + len, sizeof(debug_str) - len, " %02x", total_buf[i + j]);
+//     }
     
-    LOG_INFO("%s", debug_str);
-}
-    LOG_INFO("LAST BYTE: %02x No. of Bytes %d", total_buf[bytes_received], bytes_received);
+//     LOG_INFO("%s", debug_str);
+// }
+//     LOG_INFO("LAST BYTE: %02x No. of Bytes %d", total_buf[bytes_received], bytes_received);
     #endif
   };
   CHECK_DIF_OK(status);
@@ -702,7 +727,7 @@ bool test_main(void) {
     char debug_str[512]; // Buffer for the formatted string
     int len = 0;
     
-    len += snprintf(debug_str + len, sizeof(debug_str) - len, "DEBUG INFO: RESPONSE[%d]:", i);
+    len += snprintf(debug_str + len, sizeof(debug_str) - len, "TPM RESPONSE[%d]:", i);
     
     for (int j = 0; j < 16 && (i + j) < responseSize; j++) {
         len += snprintf(debug_str + len, sizeof(debug_str) - len, " %02x", response.Buffer[i + j]);
@@ -711,13 +736,6 @@ bool test_main(void) {
     LOG_INFO("%s", debug_str);
     }
   
- // LOG_INFO("EXECUTED COMMAND");
-  //LOG_INFO("Response Created = %04x bytes", responseSize);
-  ///#ifdef NO_VERILATOR
-//   for(int i = 0; i < responseSize; i++){
-//     LOG_INFO("DEBUG INFO: BUF[%d] = %02x", i, response.Buffer[i]);
-//     }
-  //#endif
 
   // Finished processing the write command
   CHECK_DIF_OK(dif_spi_device_tpm_free_write_fifo(&spi_device));
@@ -725,7 +743,7 @@ bool test_main(void) {
   
   mmio_region_write32(pinmux.base_addr,reg_offset, 1);
   mmio_region_write32(pinmux.base_addr,reg_offset, 0);
-
+//#define READ
 #ifdef READ
 LOG_INFO("SYNC: Waiting Read");
 

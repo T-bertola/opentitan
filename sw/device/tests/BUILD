@@ -3697,22 +3697,15 @@ opentitan_test(
         "-lnosys",
         
     ],
-    # exec_env = dicts.add(
-    #     EARLGREY_SILICON_OWNER_ROM_EXT_ENVS,
-    #     {
-    #         "//hw/top_earlgrey:sim_dv": None,
-    #         "//hw/top_earlgrey:sim_verilator": None,
-    #         "//hw/top_earlgrey:fpga_cw340_sival": None,
-    #         "//hw/top_earlgrey:fpga_cw340_sival_rom_ext": None,
-    #     },
-    # ),
-        exec_env = dicts.add(
-        EARLGREY_TEST_ENVS,
+    exec_env = dicts.add(
         EARLGREY_SILICON_OWNER_ROM_EXT_ENVS,
-        EARLGREY_CW340_TEST_ENVS,
         {
-            "//hw/top_earlgrey:silicon_creator": None,
+            "//hw/top_earlgrey:sim_dv": None,
+            "//hw/top_earlgrey:sim_verilator": None,
+            "//hw/top_earlgrey:fpga_cw340_sival": None,
+            "//hw/top_earlgrey:fpga_cw340_sival_rom_ext": None,
         },
+        EARLGREY_CW340_TEST_ENVS,
     ),
     fpga = fpga_params(
         # This test requires the spi full duplex on the hyperdebug board.
@@ -3763,56 +3756,6 @@ opentitan_test(
         "//sw/device/lib/testing:rv_plic_testutils"
     ],
 )
-
-# cc_library(
-#     name = "spi_device_tpm_impl",
-#     srcs = ["spi_device_tpm_impl.c", "CommandDispatcher.c", "Marshal.c"],
-#     hdrs = ["spi_device_tpm_impl.h", "TpmProfile_Common.h", "TpmAlgorithmDefines.h", "TpmProfile_ErrorCodes.h", "TpmBuildSwitches.h",
-#     "CommandDispatchData.h", "prototypes/region Marshal_fp.h", "TpmTypes.h", "TableMarshalDefines.h", "prototypes/Startup_fp.h"],
-#     target_compatible_with = [OPENTITAN_CPU],
-#     deps = [
-#         "//hw/top_earlgrey/sw/autogen:top_earlgrey",
-#         "//sw/device/lib/arch:device",
-#         "//sw/device/lib/base:mmio",
-#         "//sw/device/lib/dif:pinmux",
-#         "//sw/device/lib/dif:rv_plic",
-#         "//sw/device/lib/dif:spi_device",
-#         "//sw/device/lib/runtime:hart",
-#         "//sw/device/lib/runtime:irq",
-#         "//sw/device/lib/runtime:log",
-#         "//sw/device/lib/testing:isr_testutils",
-#         "//sw/device/lib/testing:spi_device_testutils",
-#         "//sw/device/lib/testing/test_framework:ottf_main",
-#         "//sw/device/lib/testing/test_framework:status",
-#     ],
-# )
-
-# cc_library(
-#     name = "TsssPM_LIB",
-#     srcs = glob([
-#         "//TPM/TPMCmd/tpm/**/*.c",
-#     ]),
-#     hdrs = glob([
-#         "TPM/TPMCmd/tpm/**/*.h",
-#         "TPM/TPMCmd/TpmConfiguration/**/*.h",
-#     ]),
-#     target_compatible_with = [OPENTITAN_CPU],
-#     deps = [
-#         "//hw/top_earlgrey/sw/autogen:top_earlgrey",
-#         "//sw/device/lib/arch:device",
-#         "//sw/device/lib/base:mmio",
-#         "//sw/device/lib/dif:pinmux",
-#         "//sw/device/lib/dif:rv_plic",
-#         "//sw/device/lib/dif:spi_device",
-#         "//sw/device/lib/runtime:hart",
-#         "//sw/device/lib/runtime:irq",
-#         "//sw/device/lib/runtime:log",
-#         "//sw/device/lib/testing:isr_testutils",
-#         "//sw/device/lib/testing:spi_device_testutils",
-#         "//sw/device/lib/testing/test_framework:ottf_main",
-#         "//sw/device/lib/testing/test_framework:status",
-#     ],
-# )
 
 opentitan_test(
     name = "spi_device_tpm_tx_rx_test",
